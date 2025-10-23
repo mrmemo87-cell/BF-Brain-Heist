@@ -1,0 +1,5 @@
+{
+  "name": "Brain Heist",
+  "description": "A mobile-first game UI built with Next.js, where users complete tasks, raid other players, and upgrade their safehouse. This application features a neon/glass theme and uses a mock data layer that can be swapped for a Supabase backend.",
+  "requestFramePermissions": []
+}
