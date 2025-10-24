@@ -67,12 +67,6 @@ const logout = useMutation({
     onError: (e: any) => alert(e?.message ?? 'Login failed'),
   })
 
-  const logout = useMutation({
-    mutationFn: api.logout,
-    onSuccess: async () => {
-      await refetchMe()
-    },
-  })
 
   if (!me) {
     return (
@@ -221,11 +215,6 @@ const upgrade = useMutation({
   const jobClaim = useMutation({
     mutationFn: () => api.jobClaim(),
     onSuccess: (r) => alert(`Claimed: +${r.xp} XP, +${r.coins} coins`),
-  })
-
-  const upgrade = useMutation({
-    mutationFn: (track: any) => api.upgrade(track),
-    onSuccess: (u) => alert(`Upgraded ${u.track} → level ${u.level}`),
   })
 
   return (
