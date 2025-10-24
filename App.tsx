@@ -5,6 +5,8 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import { DataAPIProvider, useDataAPI } from './services/data'
 import { supa } from './supabaseClient'
 import LeaderboardPanel from './components/LeaderboardPanel'
+import QuestsPanel from './components/QuestsPanel'
+import GearPanel from './components/GearPanel'
 
 
 const qc = new QueryClient()
@@ -107,6 +109,8 @@ function Shell() {
         <TabLink to="/">Dashboard</TabLink>
         <TabLink to="/pvp">PvP</TabLink>
         <TabLink to="/leaderboard">Leaderboard</TabLink>
+        <TabLink to="/quests">Quests</TabLink>
+        <TabLink to="/gear">Gear</TabLink>
       </nav>
 
       {/* Routes */}
@@ -114,6 +118,8 @@ function Shell() {
         <Route path="/" element={<Dashboard ap={ap} apLoading={apLoading} refetchAP={refetchAP} />} />
         <Route path="/pvp" element={<PvPPanel />} />
         <Route path="/leaderboard" element={<LeaderboardPanel />} />
+        <Route path="/quests" element={<QuestsPanel />} />
+        <Route path="/gear" element={<GearPanel />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
