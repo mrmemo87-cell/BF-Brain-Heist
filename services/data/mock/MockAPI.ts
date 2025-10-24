@@ -1,0 +1,33 @@
+import type { DataAPI } from '../DataAPI'
+import type { APStatus, BattleResult, Job, PvETier, Profile, RaidTarget, UpgradeState, UpgradeTrack, UserJob } from '../types'
+
+
+let profile: Profile | null = { id: 'demo', username: 'demo', email: 'demo@demo.com', batch: '8A', xp: 120, coins: 350, level: 3, streak: 2, avatarUrl: '' }
+let ap = { now: 12, max: 12, regenMs: 18*60000, nextInMs: 60000 }
+
+
+export const mockAPI: DataAPI = {
+async whoAmI() { return profile },
+async login(identifier: string) { profile = { ...profile!, username: identifier }; return { token: 'mock' } },
+async logout() { profile = null },
+async apStatus() { return { apNow: ap.now, apMax: ap.max, regenMs: ap.regenMs, nextInMs: ap.nextInMs } },
+async jobsCatalog() { return [
+{ id: '1', name: 'Recon Sweep', durationMin: 60, coinReward: 70, xpReward: 10 },
+{ id: '2', name: 'Night Watch', durationMin: 120, coinReward: 150, xpReward: 15 },
+{ id: '3', name: 'Deep Stakeout', durationMin: 240, coinReward: 340, xpReward: 25 },
+{ id: '4', name: 'Full Cover', durationMin: 480, coinReward: 700, xpReward: 40 },
+] },
+async jobStart(jobId: string, autoqueue: boolean) { return { jobId, startedAt: new Date().toISOString(), endsAt: new Date(Date.now()+3600000).toISOString(), claimed: false, autoqueue } },
+async jobClaim() { return { coins: 100, xp: 20 } },
+async upgrades() { return [
+{ track: 'locker', level: 1 }, { track: 'firewall', level: 1 }, { track: 'sprint_path', level: 1 },
+{ track: 'war_chest', level: 1 }, { track: 'heist_codex', level: 1 }, { track: 'sentinel', level: 1 },
+] },
+async upgrade(track: UpgradeTrack) { return { track, level: 2 } },
+async pveRun(tier: PvETier) { return { xp: tier==='easy'?10: tier==='standard'?16:26, coins: tier==='easy'?50: tier==='standard'?80:130, outcome: 'success' } },
+async raidTargets(): Promise<RaidTarget[]> { return [
+{ id: 'u1', username: 'wolf-1', level: 3, batch: '8B', power: 42, raidsToday: 0, raidsCap: 5 },
+{ id: 'u2', username: 'wolf-2', level: 4, batch: '8C', power: 55, raidsToday: 1, raidsCap: 5 },
+] },
+async raidAttack() { return { win: true, xp: 30, coins: 50, defenderCoinLoss: 25, message: 'Clean hit.' } as BattleResult },
+}
