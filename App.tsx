@@ -24,6 +24,18 @@ export default function App() {
 }
 
 function Shell() {
+  
+  const qc = useQueryClient()
+
+const logout = useMutation({
+  mutationFn: api.logout,
+  onSuccess: async () => {
+    qc.clear()                         // drop all cached data
+    await supa.auth.getSession()       // settle auth state
+    window.location.href = '/'         // show login immediately
+  },
+  onError: (e: any) => alert(e?.message ?? 'Logout failed'),
+})
   const api = useDataAPI()
 
   React.useEffect(() => {
@@ -178,6 +190,20 @@ function APBar({ apNow, apMax, nextInMs }: { apNow: number; apMax: number; nextI
 /* ---------------- Quick Actions ---------------- */
 
 function QuickActions() {
+ 
+ const qc = useQueryClient()
+
+const upgrade = useMutation({
+  mutationFn: (track: any) => api.upgrade(track),
+  onSuccess: async (u) => {
+    alert(`Upgraded ${u.track} → level ${u.level}`)
+    await qc.invalidateQueries({ queryKey: ['ap'] })       // refresh AP bar (apMax)
+    await qc.invalidateQueries({ queryKey: ['whoAmI'] })   // refresh header stats
+    await qc.invalidateQueries({ queryKey: ['upgrades'] }) // if you list them anywhere
+  },
+  onError: (e: any) => alert(e?.message ?? 'Upgrade failed'),
+})
+
   const api = useDataAPI()
 
   const pve = useMutation({
