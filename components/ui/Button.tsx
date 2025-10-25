@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { motion } from 'framer-motion';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'destructive' | 'ghost';
@@ -32,8 +33,13 @@ export const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', 
   ].join(' ');
 
   return (
-    <button className={finalClassName} {...props}>
+    <motion.button
+      whileTap={{ scale: 0.96 }}
+      whileHover={{ scale: 1.02 }}
+      className={finalClassName}
+      {...props}
+    >
       {children}
-    </button>
+    </motion.button>
   );
 };

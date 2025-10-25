@@ -23,3 +23,26 @@ export type UserJob = { jobId: string; startedAt: string; endsAt: string; claime
 export type UpgradeState = { track: UpgradeTrack; level: number }
 export type RaidTarget = { id: string; username: string; level: number; batch: Batch; power: number; raidsToday: number; raidsCap: number }
 export type BattleResult = { win: boolean; xp: number; coins: number; defenderCoinLoss?: number; message: string }
+export type MCQ = {
+	id: number
+	subjectId?: number | null
+	body: string
+	options: [string,string,string,string]
+	difficulty?: number
+}
+
+export type NewsItem = {
+	id: number
+	kind: string
+	title: string
+	body: string
+	meta?: any
+	createdAt: string
+}
+export type ClanChatMessage = {
+	id: number
+	userId: string
+	username: string | null
+	message: string
+	createdAt: string
+}

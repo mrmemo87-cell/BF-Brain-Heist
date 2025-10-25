@@ -1,4 +1,17 @@
-import type { APStatus, BattleResult, Job, PvETier, Profile, RaidTarget, UpgradeState, UpgradeTrack, UserJob } from './types'
+import type {
+	APStatus,
+	BattleResult,
+	ClanChatMessage,
+	Job,
+	MCQ,
+	NewsItem,
+	PvETier,
+	Profile,
+	RaidTarget,
+	UpgradeState,
+	UpgradeTrack,
+	UserJob,
+} from './types'
 
 
 export interface DataAPI {
@@ -24,4 +37,16 @@ pveRun(tier: PvETier): Promise<{ xp: number; coins: number; outcome: 'success'|'
 
 raidTargets(): Promise<RaidTarget[]>
 raidAttack(targetId: string): Promise<BattleResult>
+
+clanChatRecent(limit?: number): Promise<ClanChatMessage[]>
+clanChatPost(message: string): Promise<any>
+
+profileUpdate(username?: string, avatarUrl?: string): Promise<any>
+
+// MCQ (quiz)
+mcqNext(subjectId?: number | null): Promise<MCQ | null>
+mcqSubmit(id: number, choice: 1|2|3|4): Promise<{ correct: boolean; message?: string }>
+
+// News
+newsFeed(limit?: number): Promise<NewsItem[]>
 }

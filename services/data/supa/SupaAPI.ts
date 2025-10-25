@@ -3,8 +3,16 @@ import { z } from 'zod'
 import { supa } from '../../../supabaseClient'
 import type { DataAPI } from '../DataAPI'
 import type {
-  APStatus, BattleResult, Job, PvETier, Profile, RaidTarget,
-  UpgradeState, UpgradeTrack, UserJob
+  APStatus,
+  BattleResult,
+  ClanChatMessage,
+  Job,
+  PvETier,
+  Profile,
+  RaidTarget,
+  UpgradeState,
+  UpgradeTrack,
+  UserJob,
 } from '../types'
 
 // We only validate the AP payload with Zod here.
@@ -150,12 +158,68 @@ export const supaAPI: DataAPI = {
   async raidAttack(defenderId: string): Promise<BattleResult> {
     const { data, error } = await supa.rpc('raid_attack', { defender_id: defenderId })
     if (error) throw error
+
+    // log to news immediately (kind 'pvp')
+    const title = data.win ? 'PvP Victory!' : 'PvP Loss'
+    const body  = `+${data.xp} XP · +${data.coins} coins · vs ${defenderId.slice(0,6)}…`
+    const { data: newsData, error: newsError } = await supa.rpc('news_add', { p_kind: 'pvp', p_title: title, p_body: body, p_target: defenderId })
+
     return {
       win: data.win,
       xp: data.xp,
       coins: data.coins,
       defenderCoinLoss: data.defender_coin_loss ?? 0,
       message: data.message,
+      // For debugging:
+      _newsAddResult: newsError ? { error: newsError.message } : newsData,
     }
+  },
+
+  async clanChatRecent(): Promise<ClanChatMessage[]> {
+    const { data, error } = await supa.rpc('clan_chat_recent')
+    if (error) throw error
+    return (data ?? []) as ClanChatMessage[]
+  },
+
+  async clanChatPost(message: string) {
+    const { error } = await supa.rpc('clan_chat_post', { p_message: message })
+    if (error) throw error
+  },
+
+  async profileUpdate(username?: string, avatarUrl?: string) {
+    const { data, error } = await supa.rpc('profile_update', {
+      p_username: username ?? null,
+      p_avatar_url: avatarUrl ?? null,
+    })
+    if (error) throw error
+    return data
+  },
+
+  // ===== Quests (MCQ) =====
+  async mcqNext(subjectId?: number) {
+    const { data, error } = await supa.rpc('mcq_next', { p_subject_id: subjectId ?? null })
+    if (error) throw error
+    if (!data) return null
+    const options = [data.opt1, data.opt2, data.opt3, data.opt4].map((opt: any) => String(opt ?? '')) as [string,string,string,string]
+    return {
+      id: data.id,
+      subjectId: data.subject_id ?? null,
+      body: data.body ?? '',
+      options,
+      difficulty: data.difficulty ?? undefined,
+    }
+  },
+
+  async mcqSubmit(questionId: number, choice: 1|2|3|4) {
+    const { data, error } = await supa.rpc('mcq_submit', { p_question_id: questionId, p_choice: choice })
+    if (error) throw error
+    return data
+  },
+
+  // ===== News =====
+  async newsFeed(limit: number = 50) {
+    const { data, error } = await supa.rpc('news_feed', { p_limit: limit })
+    if (error) throw error
+    return (data ?? []) as any[]
   },
 }

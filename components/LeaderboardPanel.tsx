@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supa } from '../supabaseClient' // <- root → components → back to root
+import { motion } from 'framer-motion'
 
 type Leader = {
   id: string
@@ -39,7 +40,15 @@ export default function LeaderboardPanel() {
       {!isLoading && data && data.length > 0 && (
         <ol className="space-y-2">
           {data.map((p, i) => (
-            <li key={p.id} className="flex items-center justify-between rounded-xl border p-2">
+            <motion.li
+              key={p.id}
+              className="flex items-center justify-between rounded-xl border p-2"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(0.02 * i, 0.3) }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+            >
               <div className="flex items-center gap-3">
                 <span className="w-6 text-right opacity-70">#{i + 1}</span>
                 <div>
@@ -51,7 +60,7 @@ export default function LeaderboardPanel() {
                 <div className="opacity-80">{p.xp} XP</div>
                 <div className="opacity-60">{p.coins} coins</div>
               </div>
-            </li>
+            </motion.li>
           ))}
         </ol>
       )}

@@ -1,5 +1,16 @@
 import type { DataAPI } from '../DataAPI'
-import type { APStatus, BattleResult, Job, PvETier, Profile, RaidTarget, UpgradeState, UpgradeTrack, UserJob } from '../types'
+import type {
+	APStatus,
+	BattleResult,
+	ClanChatMessage,
+	Job,
+	PvETier,
+	Profile,
+	RaidTarget,
+	UpgradeState,
+	UpgradeTrack,
+	UserJob,
+} from '../types'
 
 
 let profile: Profile | null = { id: 'demo', username: 'demo', email: 'demo@demo.com', batch: '8A', xp: 120, coins: 350, level: 3, streak: 2, avatarUrl: '' }
@@ -30,4 +41,37 @@ async raidTargets(): Promise<RaidTarget[]> { return [
 { id: 'u2', username: 'wolf-2', level: 4, batch: '8C', power: 55, raidsToday: 1, raidsCap: 5 },
 ] },
 async raidAttack() { return { win: true, xp: 30, coins: 50, defenderCoinLoss: 25, message: 'Clean hit.' } as BattleResult },
+async clanChatRecent(): Promise<ClanChatMessage[]> {
+	return [
+		{ id: 2, userId: 'u2', username: 'AgentFox', message: 'Ready for tonight?', createdAt: new Date(Date.now() - 120000).toISOString() },
+		{ id: 1, userId: 'u1', username: 'AgentWolf', message: 'Keep grinding vault donations.', createdAt: new Date(Date.now() - 300000).toISOString() },
+	]
+},
+async clanChatPost() { return { ok: true } },
+async profileUpdate(username?: string, avatarUrl?: string) {
+	if (profile) {
+		profile = { ...profile, username: username ?? profile.username, avatarUrl: avatarUrl ?? profile.avatarUrl }
+	}
+	return profile
+},
+async mcqNext(subjectId?: number | null) {
+	return {
+		id: 1,
+		subjectId: subjectId ?? null,
+		body: 'What is 2 + 2?',
+		options: ['1','2','4','3'],
+		difficulty: 1,
+	}
+},
+async mcqSubmit(id?: number, choice?: number) {
+	// correct option is 3 for mock
+	const correct = choice === 3
+	return { correct, message: correct ? 'Nice!' : 'Wrong' }
+},
+async newsFeed(limit?: number) {
+	return [
+		{ id: 3, kind: 'system', title: 'Welcome', body: 'Welcome to Brain Heist!', createdAt: new Date().toISOString() },
+		{ id: 2, kind: 'clan', title: 'Clan created', body: 'AgentFox created a clan', createdAt: new Date(Date.now()-600000).toISOString() },
+	]
+},
 }
