@@ -32,11 +32,13 @@ export type MCQ = {
 }
 
 export type NewsItem = {
-	id: number
+	id: string
 	kind: string
 	title: string
 	body: string
-	meta?: any
+	actorName?: string | null
+	actorAvatar?: string | null
+	clanName?: string | null
 	createdAt: string
 }
 export type ClanChatMessage = {

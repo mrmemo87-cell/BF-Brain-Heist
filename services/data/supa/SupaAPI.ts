@@ -220,6 +220,20 @@ export const supaAPI: DataAPI = {
   async newsFeed(limit: number = 50) {
     const { data, error } = await supa.rpc('news_feed', { p_limit: limit })
     if (error) throw error
-    return (data ?? []) as any[]
+    return (data ?? []) as Array<{
+      id: string; kind: string; title: string; body: string;
+      actorName?: string | null; actorAvatar?: string | null;
+      clanName?: string | null; createdAt: string;
+    }>
+  },
+
+  // Leaderboard rows with avatars
+  async leaderboardRows() {
+    const { data, error } = await supa.rpc('leaderboard_rows')
+    if (error) throw error
+    return (data ?? []) as Array<{
+      user_id: string; username: string; avatar_url?: string | null;
+      batch: string; level: number; xp: number; coins: number; rank: number
+    }>
   },
 }

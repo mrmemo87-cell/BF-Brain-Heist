@@ -18,6 +18,7 @@ import { Audio } from './lib/audio'
 import { confettiBurst } from './lib/confetti'
 import { toast, Toasts } from './lib/toast'
 import RaidDuelModal from './components/RaidDuelModal'
+import Avatar from './components/ui/Avatar'
 
 const qc = new QueryClient()
 
@@ -123,11 +124,16 @@ function Shell() {
         <AnimatedBackground />
         <div className="container-phone p-4 space-y-6">
           <header className="flex items-center justify-between">
-            <div>
-              <h1 className="font-heading neon-head gradient-text text-3xl md:text-4xl">
-                Welcome, {me.username}
-              </h1>
-              <p className="opacity-70 text-sm">Batch {me.batch} • L{me.level} • {me.xp} XP • {me.coins} coins</p>
+            <div className="flex items-center gap-3 justify-center">
+              <Avatar src={me?.avatarUrl} name={me?.username} size={38} ring />
+              <div className="text-left">
+                <div className="font-heading neon-head gradient-text text-xl">
+                  {me?.username}
+                </div>
+                <div className="opacity-80 text-xs">
+                  Batch {me?.batch} • L{me?.level} • {me?.xp} XP • {me?.coins} coins
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button className="rounded-xl px-3 py-2 border mr-2"
@@ -136,7 +142,7 @@ function Shell() {
               </button>
               <button className="rounded-xl px-3 py-2 border mr-2"
                       onClick={()=>{ const on = Audio.toggleSfx(); alert(on?'SFX ON':'SFX OFF') }}>
-                �
+                🎵
               </button>
               <button className="rounded-xl px-3 py-2 border" onClick={() => logout.mutate()}>
                 Logout

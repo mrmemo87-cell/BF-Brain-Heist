@@ -70,8 +70,16 @@ async mcqSubmit(id?: number, choice?: number) {
 },
 async newsFeed(limit?: number) {
 	return [
-		{ id: 3, kind: 'system', title: 'Welcome', body: 'Welcome to Brain Heist!', createdAt: new Date().toISOString() },
-		{ id: 2, kind: 'clan', title: 'Clan created', body: 'AgentFox created a clan', createdAt: new Date(Date.now()-600000).toISOString() },
+		{ id: 3, kind: 'system', title: 'Welcome', body: 'Welcome to Brain Heist!', createdAt: new Date().toISOString(), actorName: 'System', actorAvatar: null },
+		{ id: 2, kind: 'pvp', title: 'PvP Victory', body: '+25 XP, +50 coins', createdAt: new Date(Date.now()-600000).toISOString(), actorName: 'demo', actorAvatar: null },
+		{ id: 1, kind: 'quest', title: 'Quest Complete', body: 'History 101 done', createdAt: new Date(Date.now()-900000).toISOString(), actorName: 'demo', actorAvatar: null },
+	]
+},
+async leaderboardRows() {
+	return [
+		{ user_id: 'u1', username: 'leader-x', avatar_url: null, batch: '8A', level: 5, xp: 550, coins: 1200, rank: 1 },
+		{ user_id: 'u2', username: 'demo', avatar_url: null, batch: '8A', level: 3, xp: 120, coins: 350, rank: 2 },
+		{ user_id: 'u3', username: 'noob-y', avatar_url: null, batch: '8B', level: 1, xp: 20, coins: 50, rank: 3 },
 	]
 },
 }

@@ -49,4 +49,7 @@ mcqSubmit(id: number, choice: 1|2|3|4): Promise<{ correct: boolean; message?: st
 
 // News
 newsFeed(limit?: number): Promise<NewsItem[]>
+
+// Leaderboard
+leaderboardRows(): Promise<any[]>
 }
