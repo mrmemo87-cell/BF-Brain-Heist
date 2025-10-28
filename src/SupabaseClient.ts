@@ -14,6 +14,17 @@ export const supa: SupabaseClient = createClient(
   }
 );
 
+// opt-in exposure for console debugging (works in prod when you pass ?debug=1 or set a flag)
+const shouldExpose =
+  typeof window !== 'undefined' &&
+  (import.meta.env.DEV ||
+   new URLSearchParams(window.location.search).has('debug') ||
+   localStorage.getItem('EXPOSE_SUPA') === '1');
+
+if (shouldExpose) {
+  (window as any).supabase = supa;
+}
+
 // Dev-only: expose for console debugging (window.supabase)
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
   (window as any).supabase = supa;
