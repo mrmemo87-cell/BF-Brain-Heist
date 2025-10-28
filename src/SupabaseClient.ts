@@ -20,28 +20,58 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
 }
 
 let _installed = false;
-let _intervalId: ReturnType<typeof setInterval> | null = null;
+let _interval: any = null;
+let _focusHandler: (() => void) | null = null;
+let _onlineHandler: (() => void) | null = null;
 let _visHandler: (() => void) | null = null;
 let _authUnsub: { subscription?: { unsubscribe: () => void } } | null = null;
 
 export function installAuthLifecycle(qc?: QueryClient) {
-  if (_installed) return;           // idempotent (StrictMode-safe)
+  if (_installed) return; // idempotent (StrictMode-safe)
   _installed = true;
 
-  const tick = () => supa.auth.refreshSession().catch(() => {});
-  supa.auth.getSession().then(() => qc?.invalidateQueries());
-  _authUnsub = supa.auth.onAuthStateChange(() => qc?.invalidateQueries());
+  const refresh = () =>
+    supa.auth.refreshSession().finally(() => qc?.invalidateQueries());
 
-  _intervalId = setInterval(tick, 9 * 60 * 1000);
-  _visHandler = () => { if (!document.hidden) tick(); };
+  // kick once on mount
+  supa.auth.getSession().finally(() => qc?.invalidateQueries());
+
+  // refresh every 9 min
+  _interval = setInterval(refresh, 9 * 60 * 1000);
+
+  // more aggressive on focus / coming online / visible again
+  _focusHandler = () => refresh();
+  _onlineHandler = () => refresh();
+  _visHandler = () => {
+    if (!document.hidden) refresh();
+  };
+
+  window.addEventListener('focus', _focusHandler);
+  window.addEventListener('online', _onlineHandler);
   document.addEventListener('visibilitychange', _visHandler);
+
+  // react-query cache bust when auth changes
+  _authUnsub = supa.auth.onAuthStateChange(() => qc?.invalidateQueries());
 }
 
 // optional: for tests/dev to tear down
 export function __cleanupAuthLifecycle() {
-  if (_intervalId) clearInterval(_intervalId);
-  if (_visHandler) document.removeEventListener('visibilitychange', _visHandler);
+  if (_interval) {
+    clearInterval(_interval);
+    _interval = null;
+  }
+  if (_focusHandler) {
+    window.removeEventListener('focus', _focusHandler);
+    _focusHandler = null;
+  }
+  if (_onlineHandler) {
+    window.removeEventListener('online', _onlineHandler);
+    _onlineHandler = null;
+  }
+  if (_visHandler) {
+    document.removeEventListener('visibilitychange', _visHandler);
+    _visHandler = null;
+  }
   _authUnsub?.subscription?.unsubscribe?.();
   _installed = false;
 }
-

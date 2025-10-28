@@ -150,6 +150,24 @@ function Shell() {
     installAuthLifecycle(qc);
   }, [authReady, qc]);
 
+  // 🔥 Start session + refresh AP once auth is ready
+  React.useEffect(() => {
+    if (!authReady) return;
+    let dead = false;
+    (async () => {
+      try { await supa.rpc('session_start'); } catch {}
+      try { await supa.rpc('ap_status'); } catch {}
+      if (!dead) {
+        // invalidate ap/leaderboard queries etc.
+        qc.invalidateQueries({ queryKey: ['ap'] });
+        qc.invalidateQueries({ queryKey: ['leaderboardRows'] });
+        qc.invalidateQueries({ queryKey: ['clansBoard'] });
+        qc.invalidateQueries({ queryKey: ['clansMap'] });
+      }
+    })();
+    return () => { dead = true; };
+  }, [authReady, qc]);
+
   // Refresh profile when auth changes (only after auth is ready)
   React.useEffect(() => {
     if (!authReady) return;
@@ -186,11 +204,11 @@ function Shell() {
       if (!t) return;
       const isBtn =
         t.tagName === "BUTTON" ||
-        t.closest("button") ||
+        (t as any).closest?.("button") ||
         t.getAttribute("role") === "button";
       if (isBtn) sfx.play("click");
     };
-    document.addEventListener("click", onDocClick, { capture: true });
+    document.addEventListener("click", onDocClick, { capture: true } as any);
     return () =>
       document.removeEventListener("click", onDocClick, true as any);
   }, [sfx]);

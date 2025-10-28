@@ -37,9 +37,12 @@ export default function ClansPanel() {
     enabled: useSupabase,
     queryFn: async () => {
       if (!useSupabase) return [] as any[]
-      const { data, error } = await supa.rpc('clans_leaderboard', { limit_count: 20 })
-      if (error) throw error
-      return (data ?? []) as any[]
+      const r = await supa.rpc('clans_leaderboard', { limit_count: 20 })
+      if (r.error) {
+        console.warn('clans_leaderboard missing/failing, falling back:', r.error)
+        return []
+      }
+      return (r.data ?? []) as any[]
     }
   })
 
@@ -167,7 +170,7 @@ export default function ClansPanel() {
             <div className="mb-2">
               <div className="font-heading text-lg">{clan.name}</div>
               <div className="text-sm opacity-70">
-                Vault: {clan.vault} вЂў Leader: {clan.leaderName ?? String(clan.leaderId).slice(0,8) + 'вЂ¦'}
+                Vault: {clan.vault} • Leader: {clan.leaderName ?? String(clan.leaderId).slice(0,8) + '…'}
               </div>
               {!canManage ? (
                 <div className="text-sm">{clan.notice ?? 'No notice'}</div>
@@ -178,12 +181,12 @@ export default function ClansPanel() {
                     rows={3}
                     value={noticeDraft}
                     onChange={e=>setNoticeDraft(e.target.value)}
-                    placeholder="Clan noticeвЂ¦"
+                    placeholder="Clan notice…"
                   />
                   <button className="mt-2 border rounded-lg px-3 py-1 text-sm"
                           onClick={()=>setNotice.mutate()}
                           disabled={setNotice.isPending}>
-                    {setNotice.isPending ? 'SavingвЂ¦' : 'Save Notice'}
+                    {setNotice.isPending ? 'Saving…' : 'Save Notice'}
                   </button>
                 </div>
               )}
@@ -227,7 +230,7 @@ export default function ClansPanel() {
               <ul className="mt-2 space-y-1">
                 {(mine.data?.members ?? []).map((m:any)=>(
                   <li key={m.userId} className="text-sm opacity-90 flex items-center justify-between">
-                    <span>{(m.username ?? m.userId.slice(0,8))} вЂў {m.role}</span>
+                    <span>{(m.username ?? m.userId.slice(0,8))} • {m.role}</span>
                     {isLeader && m.userId !== myId && (
                       <div className="flex gap-2">
                         {m.role === 'member' && (
@@ -290,7 +293,7 @@ export default function ClansPanel() {
               >
                 <div>
                   <div className="font-heading">{c.name}</div>
-                  <div className="text-xs opacity-70">{c.members} members вЂў Vault {c.vault}</div>
+                  <div className="text-xs opacity-70">{c.members} members • Vault {c.vault}</div>
                   <div className="text-xs opacity-70">{c.notice ?? 'No notice'}</div>
                 </div>
                 {!mine.data?.clan && (
@@ -332,7 +335,7 @@ export default function ClansPanel() {
                   <div>
                     <div className="font-heading">{c.name}</div>
                     <div className="text-xs opacity-70">
-                      {c.members} members вЂў avg L{c.avgLevel}{c.leaderName ? ` вЂў Lead ${c.leaderName}` : ''}
+                      {c.members} members • avg L{c.avgLevel}{c.leaderName ? ` • Lead ${c.leaderName}` : ''}
                     </div>
                   </div>
                 </div>
@@ -393,7 +396,7 @@ function ClanChatPanel() {
         {chat.error && <div className="text-red-400 text-sm">Failed to load chat.</div>}
         {chat.data?.map((r: any) => (
           <div key={r.id} className="border rounded-xl px-3 py-2">
-            <div className="text-sm"><b>{r.username}</b> <span className="opacity-60 text-xs">В· {dayjs(r.created_at).fromNow()}</span></div>
+            <div className="text-sm"><b>{r.username}</b> <span className="opacity-60 text-xs">· {dayjs(r.created_at).fromNow()}</span></div>
             <div className="opacity-90">{r.message}</div>
           </div>
         ))}
@@ -406,7 +409,7 @@ function ClanChatPanel() {
       >
         <input
           className="flex-1 bg-transparent border rounded-xl px-3 py-2"
-          placeholder="Type a messageвЂ¦"
+          placeholder="Type a message…"
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
         />
@@ -421,5 +424,3 @@ function ClanChatPanel() {
     </section>
   )
 }
-
-
