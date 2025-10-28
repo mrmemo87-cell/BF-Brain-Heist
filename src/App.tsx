@@ -50,6 +50,11 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 /** new: extracted logout */
 import LogoutButton from "@/components/LogoutButton";
 
+React.useEffect(() => {
+  if (import.meta.env.DEV) {
+    (window as any).supabase = supa;
+  }
+}, []);
 // ---- providers ----
 const qc = new QueryClient();
 
@@ -230,6 +235,7 @@ function Shell() {
     }, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [authReady]);
+
 
   // —— First Run Setup modal state —— //
   const [showSetup, setShowSetup] = React.useState(false);
