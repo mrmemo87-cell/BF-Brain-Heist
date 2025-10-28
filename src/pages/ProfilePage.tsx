@@ -1,7 +1,7 @@
 ﻿
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useDataAPI } from '@/hooks/useDataAPI';
+import { useDataAPI } from '@/services/data';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Progress } from '@/components/ui/Progress';
 import { Button } from '@/components/ui/Button';
@@ -86,5 +86,6 @@ const ProfilePage: React.FC = () => {
 };
 
 export default ProfilePage;
+
 
 

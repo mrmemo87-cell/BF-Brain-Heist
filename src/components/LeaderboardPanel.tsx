@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supa } from '@/SupabaseClient'
 import { Button } from './ui/Button'
 import RaidResultModal from '@/components/RaidResultModal'
-import { useDataAPI } from '@/hooks/useDataAPI'
+import { useDataAPI } from '@/services/data'
 
 
 function useMe() {
@@ -172,5 +172,6 @@ export default function LeaderboardPanel() {
     </>
   )
 }
+
 
 

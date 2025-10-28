@@ -21,7 +21,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { supa, installAuthLifecycle } from "@/SupabaseClient";
 
 /** data layer (lives in src) */
-import { DataAPIProvider, useDataAPI } from "@/services/data";
+import { DataAPIProvider, useDataAPI } from '@/services/data';
 import type { APStatus, Profile } from "@/services/data/types";
 
 /** pages (in src/pages) */

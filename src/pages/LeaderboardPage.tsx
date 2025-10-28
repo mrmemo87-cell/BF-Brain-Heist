@@ -1,7 +1,7 @@
 ﻿
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useDataAPI } from "@/hooks/useDataAPI';
+import { useDataAPI } from '@/services/data';
 import type { Profile, Batch } from '../types';
 import { Card, CardContent } from "@/components/ui/Card';
 import { Trophy } from "@/components/icons/Icons';
@@ -81,5 +81,6 @@ const LeaderboardPage: React.FC = () => {
 };
 
 export default LeaderboardPage;
+
 
 

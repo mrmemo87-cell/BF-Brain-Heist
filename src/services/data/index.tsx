@@ -1,21 +1,18 @@
 ﻿// src/services/data/index.tsx
+import React, { createContext, useContext, useMemo } from 'react';
 import { createSupaAPI } from './supa/SupaAPI';
-// If you really need mock later: import { createMockAPI } from './mock/MockAPI';
 
-export const api = createSupaAPI();
 export type DataAPI = ReturnType<typeof createSupaAPI>;
 
-// simple provider
-import React, { createContext, useContext, useMemo } from 'react';
-const Ctx = createContext<{ api: DataAPI } | null>(null);
+const Ctx = createContext<DataAPI | null>(null);
 
 export function DataAPIProvider({ children }: { children: React.ReactNode }) {
-  const value = useMemo(() => ({ api }), []);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  const api = useMemo(() => createSupaAPI(), []);
+  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 
-export function useDataAPI() {
+export function useDataAPI(): DataAPI {
   const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useDataAPI must be used within DataAPIProvider');
-  return ctx.api;
+  if (!ctx) throw new Error('useDataAPI must be used within a DataProvider');
+  return ctx;
 }

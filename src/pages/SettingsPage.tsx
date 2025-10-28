@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
-import { useDataAPI } from '@/hooks/useDataAPI';
+import { useDataAPI } from '@/services/data';
 import { useMutation } from '@tanstack/react-query';
 
 const SettingsPage: React.FC = () => {
@@ -38,5 +38,6 @@ const SettingsPage: React.FC = () => {
 };
 
 export default SettingsPage;
+
 
 

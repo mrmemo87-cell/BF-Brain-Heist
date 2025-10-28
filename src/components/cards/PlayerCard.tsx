@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Icons } from '@/components/icons/Icons'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
-import { useDataAPI } from '@/hooks/useDataAPI'
+import { useDataAPI } from '@/services/data'
 import RaidDuelModal from '@/components/RaidDuelModal'
 import { LeaderboardRow } from '@/services/data/types'
 
@@ -106,4 +106,5 @@ const PlayerCard = ({ player, me, isOpen, onClose }: PlayerCardProps) => {
 }
 
 export default PlayerCard
+
 

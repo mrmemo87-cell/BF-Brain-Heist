@@ -1,7 +1,7 @@
 ﻿
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDataAPI } from '@/hooks/useDataAPI';
+import { useDataAPI } from '@/services/data';
 import type { PvETier } from '../../types';
 import { NeonCard } from '@/components/common/NeonCard';
 import { Button } from '@/components/ui/Button';
@@ -66,5 +66,6 @@ const PvePage: React.FC = () => {
 };
 
 export default PvePage;
+
 
 

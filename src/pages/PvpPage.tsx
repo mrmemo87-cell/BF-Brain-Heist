@@ -1,7 +1,7 @@
 ﻿
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDataAPI } from '@/hooks/useDataAPI';
+import { useDataAPI } from '@/services/data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToasts } from '@/store/toastStore';
@@ -99,5 +99,6 @@ const PvpPage: React.FC = () => {
 };
 
 export default PvpPage;
+
 
 
