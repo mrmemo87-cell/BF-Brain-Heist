@@ -50,11 +50,6 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 /** new: extracted logout */
 import LogoutButton from "@/components/LogoutButton";
 
-React.useEffect(() => {
-  if (import.meta.env.DEV) {
-    (window as any).supabase = supa;
-  }
-}, []);
 // ---- providers ----
 const qc = new QueryClient();
 
@@ -135,6 +130,13 @@ function Shell() {
 
   const [showIntro, setShowIntro] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
+
+  // ✅ moved from top-level: hooks must run inside a component
+  React.useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).supabase = supa;
+    }
+  }, []);
 
   // Single source of truth for OAuth callback readiness
   const authReady = useAuthCallback();
@@ -235,7 +237,6 @@ function Shell() {
     }, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [authReady]);
-
 
   // —— First Run Setup modal state —— //
   const [showSetup, setShowSetup] = React.useState(false);
