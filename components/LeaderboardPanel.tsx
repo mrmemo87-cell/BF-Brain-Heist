@@ -28,33 +28,15 @@ export default function LeaderboardPanel() {
   });
 
   const rowsQ = useQuery({
-    queryKey: ['leaderboardRows'],
+    queryKey: ['leaderboard', 50],
     queryFn: async () => {
-      const r = await supa.rpc('leaderboard_rows', { p_limit: 100 })
-      if (!r.error && Array.isArray(r.data)) return r.data
-      // fallback (works if public SELECT policy exists on profiles)
-      const fb = await supa.from('profiles')
-        .select('id,username,avatar_url,batch,level,xp,coins,last_seen')
-        .order('xp', { ascending: false })
-        .order('level', { ascending: false })
-        .order('coins', { ascending: false })
-        .limit(100)
-      if (fb.error) throw fb.error
-      return (fb.data ?? []).map((p: any, i: number) => ({
-        user_id: p.id,
-        username: p.username,
-        avatar_url: p.avatar_url,
-        batch: p.batch,
-        level: p.level,
-        xp: p.xp,
-        coins: p.coins,
-        last_seen: p.last_seen,
-        clan_id: null,
-        clan_name: null,
-        rank: i + 1,
-      }))
+      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
+      if (r.error) throw r.error;
+      return r.data ?? [];
     },
-    retry: 1,
+    refetchInterval: 15000,               // 👈 gentle polling
+    refetchIntervalInBackground: true,    // keep ticking when tab is bg
+    refetchOnWindowFocus: true,
   })
 
   // clan rank map

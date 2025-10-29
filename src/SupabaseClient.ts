@@ -1,8 +1,8 @@
 ﻿// src/SupabaseClient.ts
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { focusManager, type QueryClient } from '@tanstack/react-query';
 
-export const supa: SupabaseClient = createClient(
+export const supa = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
   import.meta.env.VITE_SUPABASE_ANON_KEY!,
   {
@@ -10,56 +10,102 @@ export const supa: SupabaseClient = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      multiTab: false, // avoid cross-tab churn
     },
   }
 );
 
-// opt-in exposure for console debugging (works in prod when you pass ?debug=1 or set a flag)
-const shouldExpose =
-  typeof window !== 'undefined' &&
-  (import.meta.env.DEV ||
-   new URLSearchParams(window.location.search).has('debug') ||
-   localStorage.getItem('EXPOSE_SUPA') === '1');
+/**
+ * 🔧 Thenable patch: PostgREST builders implement `.then` but may not implement `.catch`/`.finally`.
+ * Some code (or libs) will do `supa.rpc(...).catch(...)` which throws "catch is not a function".
+ * We probe a builder instance and patch its prototype once so every future builder gains `.catch`/`.finally`.
+ * This does NOT make any network requests.
+ */
+try {
+  // create a builder without executing it
+  // (no await/then => no network; it's just a builder object)
+  // @ts-expect-error - we just need a PostgREST builder instance
+  const probe = supa.rpc('__bh_proto_probe__');
+  const proto = Object.getPrototypeOf(probe);
 
-if (shouldExpose) {
-  (window as any).supabase = supa;
+  if (proto && typeof proto.then === 'function') {
+    if (typeof proto.catch !== 'function') {
+      Object.defineProperty(proto, 'catch', {
+        configurable: true,
+        writable: true,
+        value: function (onRejected: (reason?: any) => any) {
+          return Promise.resolve(this).catch(onRejected);
+        },
+      });
+    }
+    if (typeof proto.finally !== 'function') {
+      Object.defineProperty(proto, 'finally', {
+        configurable: true,
+        writable: true,
+        value: function (onFinally: () => any) {
+          return Promise.resolve(this).finally(onFinally);
+        },
+      });
+    }
+  }
+} catch {
+  // ignore – worst case the patch didn't apply, but app still runs
 }
 
-// Dev-only: expose for console debugging (window.supabase)
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  (window as any).supabase = supa;
-}
-
-let _installed = false;
-let _interval: any = null;
-let _focusHandler: (() => void) | null = null;
-let _onlineHandler: (() => void) | null = null;
-let _visHandler: (() => void) | null = null;
-let _authUnsub: { subscription?: { unsubscribe: () => void } } | null = null;
-
+/**
+ * Call ONCE from App root; returns a cleanup fn.
+ * Example:
+ *   const qc = new QueryClient({...});
+ *   React.useEffect(() => installAuthLifecycle(qc), [qc]);
+ */
 export function installAuthLifecycle(qc?: QueryClient) {
-  // Start lib-managed refresh if present (v2)
+  // keep tokens fresh in the background (best-effort)
   (supa.auth as any).startAutoRefresh?.();
 
-  const refresh = () => supa.auth.refreshSession().catch(() => {});
+  const refresh = async () => {
+    try {
+      await supa.auth.refreshSession();
+    } catch {
+      // swallow refresh blips
+    }
+  };
+
   const requery = () => qc?.invalidateQueries();
 
+  // ⚠️ Non-blocking auth callback (NO Supabase calls directly inside)
+  const { data: { subscription } } = supa.auth.onAuthStateChange((event) => {
+    // Defer to next tick to avoid browser deadlocks on tab focus
+    setTimeout(() => {
+      if (event === 'SIGNED_OUT') {
+        qc?.clear();
+        if (location.pathname !== '/login') {
+          // soft redirect without blocking the event loop
+          location.href = '/login';
+        }
+        return;
+      }
+      // Any other auth event -> let React Query refire
+      requery();
+    }, 0);
+  });
+
+  // Focus/visibility resume: refresh token + tell React Query we’re focused
   const onFocus = async () => {
     if (document.hidden) return;
-    await refresh();
-    focusManager.setFocused(true);
+    await refresh();                  // run outside the auth callback
+    focusManager.setFocused(true);    // enables refetchOnWindowFocus behavior
     requery();
   };
 
-  const sub = supa.auth.onAuthStateChange(() => requery());
   window.addEventListener('focus', onFocus);
   document.addEventListener('visibilitychange', onFocus);
   window.addEventListener('online', onFocus);
 
-  const id = window.setInterval(refresh, 8 * 60 * 1000);
+  // Safety refresh every 8 minutes (keeps session warm)
+  const id = window.setInterval(() => { void refresh(); }, 8 * 60 * 1000);
 
   return () => {
-    sub.data?.subscription.unsubscribe();
+    subscription.unsubscribe();
     window.removeEventListener('focus', onFocus);
     document.removeEventListener('visibilitychange', onFocus);
     window.removeEventListener('online', onFocus);
@@ -67,24 +113,12 @@ export function installAuthLifecycle(qc?: QueryClient) {
   };
 }
 
-// optional: for tests/dev to tear down
-export function __cleanupAuthLifecycle() {
-  if (_interval) {
-    clearInterval(_interval);
-    _interval = null;
-  }
-  if (_focusHandler) {
-    window.removeEventListener('focus', _focusHandler);
-    _focusHandler = null;
-  }
-  if (_onlineHandler) {
-    window.removeEventListener('online', _onlineHandler);
-    _onlineHandler = null;
-  }
-  if (_visHandler) {
-    document.removeEventListener('visibilitychange', _visHandler);
-    _visHandler = null;
-  }
-  _authUnsub?.subscription?.unsubscribe?.();
-  _installed = false;
+/**
+ * Optional helper: use this wrapper if you prefer `await rpc('name', args)`
+ * everywhere (it throws on RPC error and returns data on success).
+ */
+export async function rpc<T = unknown>(fn: string, args?: Record<string, any>): Promise<T> {
+  const { data, error } = await supa.rpc<T>(fn, args as any);
+  if (error) throw error;
+  return data as T;
 }

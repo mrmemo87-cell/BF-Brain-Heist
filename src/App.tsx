@@ -54,16 +54,16 @@ import LogoutButton from "@/components/LogoutButton";
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
-      // Re-enable refetch on focus/reconnect to keep data fresh when the user returns
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
-      retry: (count: number, err: any) => (err?.status !== 404 && count < 2),
+      retry: (count, err: any) => (err?.status !== 404 && count < 2),
     },
   },
 });
 
-
 export default function App() {
+  React.useEffect(() => installAuthLifecycle(qc), [qc]);
+
   return (
     <QueryClientProvider client={qc}>
       <DataAPIProvider>
@@ -152,14 +152,11 @@ function Shell() {
   const authReady = useAuthCallback();
 
   // keep session presence pulsing (no-op if disabled)
-  useHeartbeat(authReady ? 60_000 : null);
+  // e.g., in Shell.tsx or App.tsx (once at the top level):
+useHeartbeat(60_000); // 1 min
 
-  // use the cleanup from installAuthLifecycle 
-  React.useEffect(() => {
-  const off = installAuthLifecycle(qc);
-  return off;
-}, [qc]);
 
+  
 
   // ?? Start session + refresh AP once auth is ready
   React.useEffect(() => {
@@ -267,7 +264,7 @@ function Shell() {
     return () => clearInterval(id);
   }, [authReady]);
 
-  // �� First Run Setup modal state �� //
+  //    First Run Setup modal state    //
   const [showSetup, setShowSetup] = React.useState(false);
 
   React.useEffect(() => {
@@ -317,7 +314,7 @@ function Shell() {
   if (!authReady) {
     return (
       <div className="w-full h-screen grid place-items-center text-white">
-        Signing you in�
+        Signing you in 
       </div>
     );
   }
@@ -340,7 +337,7 @@ function Shell() {
                 {me?.username}
               </div>
               <div className="opacity-80 text-xs">
-                Batch {me?.batch ?? "�"} � L{me?.level} � {me?.xp} XP � {me?.coins} coins
+                Batch {me?.batch ?? " "}   L{me?.level}   {me?.xp} XP   {me?.coins} coins
               </div>
             </div>
           </div>
@@ -439,7 +436,7 @@ function Shell() {
       <IntroCinematic open={showIntro} onClose={() => setShowIntro(false)} />
       {showHelp && <HelpQuickstart onClose={() => setShowHelp(false)} />}
 
-      {/* ? First Run Setup modal � opens when profile incomplete */}
+      {/* ? First Run Setup modal   opens when profile incomplete */}
       {showSetup && (
         <FirstRunSetup
           open={showSetup}
@@ -512,12 +509,12 @@ function Dashboard({
       <section className="card-glass shimmer2 p-4">
         <h3 className="font-heading mb-2">Action Points</h3>
         {apLoading ? (
-          <div className="opacity-70 text-sm">Loading�</div>
+          <div className="opacity-70 text-sm">Loading </div>
         ) : ap ? (
           <>
             <APAnimatedBar apNow={ap.apNow} apMax={ap.apMax} />
             <div className="text-sm opacity-80 mb-2">
-              {ap.apNow} / {ap.apMax} � +1 in ~{Math.ceil((ap.nextInMs || 0) / 1000)}s
+              {ap.apNow} / {ap.apMax}   +1 in ~{Math.ceil((ap.nextInMs || 0) / 1000)}s
             </div>
             <button
               className="rounded-xl px-3 py-2 border text-sm"
@@ -537,14 +534,14 @@ function Dashboard({
           onClick={() => pve.mutate("easy")}
         >
           <h4 className="font-heading mb-1">Run PvE (Easy)</h4>
-          <p className="text-sm opacity-70">2 AP � ~10 XP � ~50 coins</p>
+          <p className="text-sm opacity-70">2 AP   ~10 XP   ~50 coins</p>
         </button>
         <button
           className="card-glass shimmer2 p-4 text-left btn-neon"
           onClick={() => jobStart.mutate("2h")}
         >
           <h4 className="font-heading mb-1">Start Job (2h)</h4>
-          <p className="text-sm opacity-70">+150 coins � +15 XP</p>
+          <p className="text-sm opacity-70">+150 coins   +15 XP</p>
         </button>
         <button
           className="card-glass shimmer2 p-4 text-left btn-neon"
