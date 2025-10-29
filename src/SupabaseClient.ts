@@ -1,6 +1,6 @@
 ﻿// src/SupabaseClient.ts
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { QueryClient } from '@tanstack/react-query';
+import { focusManager, type QueryClient } from '@tanstack/react-query';
 
 export const supa: SupabaseClient = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -42,25 +42,27 @@ export function installAuthLifecycle(qc?: QueryClient) {
   (supa.auth as any).startAutoRefresh?.();
 
   const refresh = () => supa.auth.refreshSession().catch(() => {});
-  supa.auth.getSession().then(() => qc?.invalidateQueries());
+  const requery = () => qc?.invalidateQueries();
 
-  const sub = supa.auth.onAuthStateChange((event) => {
-    if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'SIGNED_IN') {
-      qc?.invalidateQueries();
-    }
-    if (event === 'SIGNED_OUT') {
-      qc?.clear();
-      window.location.assign('/login');
-    }
-  });
+  const onFocus = async () => {
+    if (document.hidden) return;
+    await refresh();
+    focusManager.setFocused(true);
+    requery();
+  };
 
-  const vis = () => { if (!document.hidden) refresh(); };
-  document.addEventListener('visibilitychange', vis);
+  const sub = supa.auth.onAuthStateChange(() => requery());
+  window.addEventListener('focus', onFocus);
+  document.addEventListener('visibilitychange', onFocus);
+  window.addEventListener('online', onFocus);
+
   const id = window.setInterval(refresh, 8 * 60 * 1000);
 
   return () => {
     sub.data?.subscription.unsubscribe();
-    document.removeEventListener('visibilitychange', vis);
+    window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onFocus);
+    window.removeEventListener('online', onFocus);
     clearInterval(id);
   };
 }

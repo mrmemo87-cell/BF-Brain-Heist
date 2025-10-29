@@ -54,10 +54,10 @@ import LogoutButton from "@/components/LogoutButton";
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // stop auto refetch when tab gets focus
-      retry: (failureCount, err: unknown) =>
-        // retry up to 2 times unless the error looks like an HTTP 404
-        ((err as any)?.status !== 404 && failureCount < 2),
+      // Re-enable refetch on focus/reconnect to keep data fresh when the user returns
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      retry: (count: number, err: any) => (err?.status !== 404 && count < 2),
     },
   },
 });
