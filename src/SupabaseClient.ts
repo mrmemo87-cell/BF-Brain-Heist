@@ -38,31 +38,31 @@ let _visHandler: (() => void) | null = null;
 let _authUnsub: { subscription?: { unsubscribe: () => void } } | null = null;
 
 export function installAuthLifecycle(qc?: QueryClient) {
-  if (_installed) return; // idempotent (StrictMode-safe)
-  _installed = true;
+  // Start lib-managed refresh if present (v2)
+  (supa.auth as any).startAutoRefresh?.();
 
-  const refresh = () =>
-    supa.auth.refreshSession().finally(() => qc?.invalidateQueries());
+  const refresh = () => supa.auth.refreshSession().catch(() => {});
+  supa.auth.getSession().then(() => qc?.invalidateQueries());
 
-  // kick once on mount
-  supa.auth.getSession().finally(() => qc?.invalidateQueries());
+  const sub = supa.auth.onAuthStateChange((event) => {
+    if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'SIGNED_IN') {
+      qc?.invalidateQueries();
+    }
+    if (event === 'SIGNED_OUT') {
+      qc?.clear();
+      window.location.assign('/login');
+    }
+  });
 
-  // refresh every 9 min
-  _interval = setInterval(refresh, 9 * 60 * 1000);
+  const vis = () => { if (!document.hidden) refresh(); };
+  document.addEventListener('visibilitychange', vis);
+  const id = window.setInterval(refresh, 8 * 60 * 1000);
 
-  // more aggressive on focus / coming online / visible again
-  _focusHandler = () => refresh();
-  _onlineHandler = () => refresh();
-  _visHandler = () => {
-    if (!document.hidden) refresh();
+  return () => {
+    sub.data?.subscription.unsubscribe();
+    document.removeEventListener('visibilitychange', vis);
+    clearInterval(id);
   };
-
-  window.addEventListener('focus', _focusHandler);
-  window.addEventListener('online', _onlineHandler);
-  document.addEventListener('visibilitychange', _visHandler);
-
-  // react-query cache bust when auth changes
-  _authUnsub = supa.auth.onAuthStateChange(() => qc?.invalidateQueries());
 }
 
 // optional: for tests/dev to tear down

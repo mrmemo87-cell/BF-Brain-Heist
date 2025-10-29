@@ -51,7 +51,17 @@ import { useHeartbeat } from "@/hooks/useHeartbeat";
 import LogoutButton from "@/components/LogoutButton";
 
 // ---- providers ----
-const qc = new QueryClient();
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // stop auto refetch when tab gets focus
+      retry: (failureCount, err: unknown) =>
+        // retry up to 2 times unless the error looks like an HTTP 404
+        ((err as any)?.status !== 404 && failureCount < 2),
+    },
+  },
+});
+
 
 export default function App() {
   return (
@@ -144,11 +154,12 @@ function Shell() {
   // keep session presence pulsing (no-op if disabled)
   useHeartbeat(authReady ? 60_000 : null);
 
-  // Keep session fresh; only do work after auth is ready
+  // use the cleanup from installAuthLifecycle 
   React.useEffect(() => {
-    if (!authReady) return;
-    installAuthLifecycle(qc);
-  }, [authReady, qc]);
+  const off = installAuthLifecycle(qc);
+  return off;
+}, [qc]);
+
 
   // 🔥 Start session + refresh AP once auth is ready
   React.useEffect(() => {
