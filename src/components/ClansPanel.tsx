@@ -37,7 +37,7 @@ export default function ClansPanel() {
     enabled: useSupabase,
     queryFn: async () => {
       if (!useSupabase) return [] as any[]
-      const r = await supa.rpc('clans_leaderboard', { limit_count: 20 })
+      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
       if (r.error) {
         console.warn('clans_leaderboard missing/failing, falling back:', r.error)
         return []

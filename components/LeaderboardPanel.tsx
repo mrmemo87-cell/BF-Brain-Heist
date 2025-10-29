@@ -61,7 +61,7 @@ export default function LeaderboardPanel() {
   const clansQ = useQuery({
     queryKey:['clansMap'],
     queryFn: async () => {
-      const r = await supa.rpc('clans_leaderboard', { p_limit: 500 });
+      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
       if (r.error) throw r.error;
       const list = r.data ?? [];
       return Object.fromEntries(list.map((c:any)=>[c.id, c.rank]));
