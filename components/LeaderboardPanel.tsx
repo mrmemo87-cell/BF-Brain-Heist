@@ -1,155 +1,56 @@
-import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { supa } from '../src/SupabaseClient'
-import { Button } from '../src/components/ui/Button'
-import RaidResultModal from '../src/components/RaidResultModal'
-import { useDataAPI } from '../src/hooks/useDataAPI'
-
-function useMe() {
-  const q = useQuery({
-    queryKey:['me'],
-    queryFn: async () => (await supa.auth.getUser()).data.user
-  });
-  return q.data;
-}
+import * as React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supa } from '@/SupabaseClient';
 
 export default function LeaderboardPanel() {
-  const me = useMe();
-  const dataAPI = useDataAPI();
-  const [raidModal, setRaidModal] = React.useState({
-    open: false,
-    attacker: { name: '', avatar: null },
-    defender: { name: '', avatar: null },
-    win: false,
-    coinsMoved: 0,
-    xp: 0,
-    pwin: 0,
-    stealPct: 0
-  });
+  const qc = useQueryClient();
 
-  const rowsQ = useQuery({
+  // load leaderboard
+  const { data: rows = [], isLoading, error } = useQuery({
     queryKey: ['leaderboard', 50],
     queryFn: async () => {
       const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
       if (r.error) throw r.error;
       return r.data ?? [];
     },
-    refetchInterval: 15000,               // 👈 gentle polling
-    refetchIntervalInBackground: true,    // keep ticking when tab is bg
     refetchOnWindowFocus: true,
-  })
-
-  // clan rank map
-  const clansQ = useQuery({
-    queryKey:['clansMap'],
-    queryFn: async () => {
-      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
-      if (r.error) throw r.error;
-      const list = r.data ?? [];
-      return Object.fromEntries(list.map((c:any)=>[c.id, c.rank]));
-    }
+    refetchOnReconnect: true,
+    refetchInterval: 15000,             // gentle keep-alive
+    refetchIntervalInBackground: true,
   });
 
-  const attack = async (defenderId:string, defenderData: any) => {
-    try {
-      const result = await dataAPI.raidAttack(defenderId);
+  // start session (non-fatal, keeps AP flowing)
+  React.useEffect(() => {
+    supa.rpc('session_start').catch(() => {});
+  }, []);
 
-      setRaidModal({
-        open: true,
-        attacker: { name: me?.user_metadata?.full_name || 'You', avatar: null },
-        defender: { name: defenderData.username, avatar: defenderData.avatar_url },
-        win: result.win,
-        coinsMoved: result.defenderCoinLoss || result.coins || 0,
-        xp: result.xp,
-        pwin: parseFloat((result.message?.match(/P\(win\)=([0-9.]+)/)?.[1] ?? '0.5')),
-        stealPct: (parseFloat((result.message?.match(/· ([0-9]+)% swing/)?.[1] ?? '0'))/100)
-      });
+  // attack mutation
+  const attack = useMutation({
+    mutationFn: async (defenderId: string) => {
+      const r = await supa.rpc('raid_attack', { defender_id: defenderId });
+      if (r.error) throw r.error;
+      return r.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leaderboard'] }),
+  });
 
-      // refetch data
-      rowsQ.refetch();
-    } catch (error) {
-      console.error('Attack failed:', error);
-      alert(`Attack failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  if (rowsQ.isLoading)
-    return (
-      <div className="space-y-3">
-        <div className="h-5 bg-white/10 rounded animate-pulse w-2/3" />
-        <div className="h-5 bg-white/10 rounded animate-pulse w-5/6" />
-        <div className="h-5 bg-white/10 rounded animate-pulse w-4/6" />
-      </div>
-    )
-
-  if (rowsQ.isError)
-    return (
-      <div className="text-red-400 text-sm p-3 border border-red-500/30 rounded-xl">
-        Failed to load leaderboard. {(rowsQ.error as any)?.message ?? 'RPC/network error'}
-      </div>
-    )
-
-  const rows = Array.isArray(rowsQ.data) ? rowsQ.data : []
+  if (isLoading) return <div className="p-4 text-white/70">Loading…</div>;
+  if (error)     return <div className="p-4 text-rose-400">Failed to load leaderboard.</div>;
 
   return (
-    <>
-      <ul className="divide-y divide-white/10">
-        {rows.map((r: any, i: number) => {
-          const last = r?.last_seen ? new Date(r.last_seen) : null
-          const dot =
-            !last
-              ? '#666'
-              : Date.now() - last.getTime() <= 20 * 60 * 1000
-              ? '#22c55e'
-              : Date.now() - last.getTime() <= 60 * 60 * 1000
-              ? '#f59e0b'
-              : '#ef4444'
-
-          const mine = me?.id === r.user_id;
-          const myBatch = (me as any)?.user_metadata?.batch || (me as any)?.batch;
-          const canAttack = !mine && r.batch && r.batch !== myBatch; // Can't attack users in same batch
-
-          const rank = r.clan_id ? (clansQ.data?.[r.clan_id] ?? '—') : null;
-
-          return (
-            <li key={r?.user_id ?? i} className="py-3 flex items-center gap-3">
-              <img
-                src={r?.avatar_url || '/avatar-placeholder.png'}
-                onError={(e: any) => {
-                  e.currentTarget.src = '/avatar-placeholder.png'
-                }}
-                className="w-8 h-8 rounded-lg object-cover"
-                alt=""
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{r?.username ?? 'agent'}</span>
-                  {r?.clan_name && <span className="text-xs opacity-70">• {r.clan_name}{rank ? ` (#${rank})` : ''}</span>}
-                </div>
-                <div className="text-xs opacity-70 truncate">
-                  L{Number(r?.level ?? 1)} · {Number(r?.xp ?? 0)} XP · {Number(r?.coins ?? 0)} coins
-                </div>
-              </div>
-
-              {canAttack ? (
-                <Button className="px-3 py-1 rounded-xl" onClick={()=>attack(r.user_id, r)}>Attack</Button>
-              ) : (
-                <span className="text-[11px] opacity-50">No PvP</span>
-              )}
-
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: dot }}
-                title={last ? last.toLocaleString() : 'unknown'}
-              />
-            </li>
-          )
-        })}
-      </ul>
-      <RaidResultModal
-        {...raidModal}
-        onClose={() => setRaidModal(m => ({...m, open: false}))}
-      />
-    </>
-  )
+    <div className="p-4 space-y-3">
+      {rows.map((r: any) => (
+        <div key={r.clan_id} className="flex items-center justify-between rounded-xl bg-white/5 p-3">
+          <div className="text-white">{r.name ?? '—'}</div>
+          <button
+            className="px-3 py-1 rounded-lg bg-teal-500/80 hover:bg-teal-500 text-black"
+            onClick={() => attack.mutate(r.clan_id)}
+            disabled={attack.isPending}
+          >
+            {attack.isPending ? 'Attacking…' : 'Attack'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 }
