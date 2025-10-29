@@ -16,7 +16,9 @@ const SafehousePage: React.FC = () => {
     
     const { data: upgrades, isLoading } = useQuery({
         queryKey: ['upgrades'],
-        queryFn: () => api.upgrades()
+        queryFn: () => api.upgrades(),
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
     
     const upgradeMutation = useMutation({

@@ -13,12 +13,17 @@ const ProfilePage: React.FC = () => {
     const { data: profile, isLoading: profileLoading } = useQuery({
         queryKey: ['profile'],
         queryFn: () => api.whoAmI(),
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
 
     const { data: apStatus, isLoading: apLoading } = useQuery({
         queryKey: ['apStatus'],
         queryFn: () => api.apStatus(),
         refetchInterval: 1000,
+        refetchIntervalInBackground: true,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
 
     if (profileLoading || apLoading) {

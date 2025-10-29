@@ -19,7 +19,9 @@ export default function ClansPanel() {
       const { data, error } = await supa.rpc('clan_info')
       if (error) throw error
       return data as any
-    }
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const list = useQuery({
@@ -28,7 +30,9 @@ export default function ClansPanel() {
       const { data, error } = await supa.rpc('clans_list')
       if (error) throw error
       return (data ?? []) as any[]
-    }
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const useSupabase = (import.meta as any).env.VITE_BACKEND === 'supabase'
@@ -38,12 +42,11 @@ export default function ClansPanel() {
     queryFn: async () => {
       if (!useSupabase) return [] as any[]
       const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
-      if (r.error) {
-        console.warn('clans_leaderboard missing/failing, falling back:', r.error)
-        return []
-      }
-      return (r.data ?? []) as any[]
-    }
+      if (r.error) throw r.error
+      return r.data ?? []
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   React.useEffect(() => {
@@ -365,6 +368,9 @@ function ClanChatPanel() {
       return data as any[]
     },
     refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const send = useMutation({

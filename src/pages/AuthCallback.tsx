@@ -14,26 +14,15 @@ export default function AuthCallback() {
       try {
         if (err) throw new Error(err);
         if (code) {
-          try {
-            await (supa.auth as any).exchangeCodeForSession?.(code);
-          } catch {
-            if ((supa.auth as any).getSessionFromUrl) {
-              await (supa.auth as any).getSessionFromUrl({ storeSession: true });
-            } else {
-              throw new Error('No exchange method available');
-            }
-          }
+          await supa.auth.exchangeCodeForSession(code);
         }
       } catch (e) {
         console.error('AuthCallback failed:', e);
       } finally {
-        // strip code/state/# fragments then go home
-        ['code', 'state', 'error', 'error_description', 'type'].forEach(k => url.searchParams.delete(k));
-        window.history.replaceState({}, '', url.pathname); // clean to /auth/callback
         nav('/', { replace: true });
       }
     })();
-  }, [nav]);
+  }, []);
 
   return (
     <div className="w-full h-screen grid place-items-center text-white">

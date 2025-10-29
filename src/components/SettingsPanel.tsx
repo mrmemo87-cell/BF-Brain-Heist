@@ -12,6 +12,8 @@ export default function SettingsPanel() {
       if (error) throw error;
       return data;
     },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const [username, setUsername] = React.useState('')

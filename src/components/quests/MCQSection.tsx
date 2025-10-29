@@ -27,6 +27,8 @@ export default function MCQSection() {
       if (error) throw error
       return data as Array<{ id: number; name: string }>
     },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const loadQ = useMutation({

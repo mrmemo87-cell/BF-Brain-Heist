@@ -22,20 +22,30 @@ export default function GearPanel() {
       if (error) throw error
       return (data ?? []) as ShopItem[]
     },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const inv = useQuery({
     queryKey: ['inventory'],
     queryFn: async () => {
-      const { data, error } = await supa.rpc('inventory_list')
-      if (error) throw error
-      return (data ?? []) as InvItem[]
+      try {
+        const { data, error } = await supa.rpc('inventory_list')
+        if (error) throw error
+        return (data ?? []) as InvItem[]
+      } catch {
+        const { data, error } = await supa.rpc('inventory_for_me')
+        if (error) throw error
+        return (data ?? []) as InvItem[]
+      }
     },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const buy = useMutation({
     mutationFn: async (itemId: string) => {
-      const { data, error } = await supa.rpc('shop_buy', { p_item_id: itemId })
+      const { data, error } = await supa.rpc('shop_buy', { item_id: itemId })
       if (error) throw error
       return data
     },
@@ -50,9 +60,8 @@ export default function GearPanel() {
 
   const equip = useMutation({
     mutationFn: async (args: { id: number; equip: boolean }) => {
-      const { data, error } = await supa.rpc('equip_item', {
-        p_user_item_id: args.id,
-        p_equip: args.equip,
+      const { data, error } = await supa.rpc('inventory_activate', {
+        entry_id: args.id,
       })
       if (error) throw error
       return data

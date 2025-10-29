@@ -49,8 +49,20 @@ const JobsPage: React.FC = () => {
     const queryClient = useQueryClient();
     const { showSuccess, showError } = useToasts();
     
-    const { data: jobs, isLoading: jobsLoading } = useQuery({ queryKey: ['jobsCatalog'], queryFn: () => api.jobsCatalog() });
-    const { data: activeJob, isLoading: activeJobLoading } = useQuery({ queryKey: ['activeJob'], queryFn: () => api.getActiveJob(), refetchInterval: 1000 });
+    const { data: jobs, isLoading: jobsLoading } = useQuery({ 
+        queryKey: ['jobsCatalog'], 
+        queryFn: () => api.jobsCatalog(),
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
+    });
+    const { data: activeJob, isLoading: activeJobLoading } = useQuery({ 
+        queryKey: ['activeJob'], 
+        queryFn: () => api.getActiveJob(), 
+        refetchInterval: 1000,
+        refetchIntervalInBackground: true,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
+    });
 
     const startJobMutation = useMutation({
         mutationFn: ({ jobId, autoqueue }: { jobId: string, autoqueue: boolean }) => api.jobStart(jobId, autoqueue),

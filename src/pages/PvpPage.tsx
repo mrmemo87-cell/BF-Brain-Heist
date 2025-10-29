@@ -14,7 +14,9 @@ const PvpPage: React.FC = () => {
     
     const { data: targets, isLoading } = useQuery({
         queryKey: ['raidTargets'],
-        queryFn: () => api.raidTargets()
+        queryFn: () => api.raidTargets(),
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
 
     const attackMutation = useMutation({

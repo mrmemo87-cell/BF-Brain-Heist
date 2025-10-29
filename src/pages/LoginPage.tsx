@@ -1,135 +1,164 @@
+// src/pages/LoginPage.tsx
 import * as React from 'react';
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { supa } from "@/SupabaseClient";
-import { useToasts } from "@/store/toastStore";
+import { useNavigate } from 'react-router-dom';
+import { supa } from '@/SupabaseClient';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Label } from '@/components/ui/Label';
 
 export default function LoginPage() {
-  const [email, setEmail] = React.useState("");
-  const [pwd, setPwd] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
   const nav = useNavigate();
-  const { showError, showSuccess } = useToasts();
+  const [email, setEmail] = React.useState('');
+  const [pwd, setPwd] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
-  const redirectTo = `${window.location.origin}/auth/callback`;
+  // If already signed in, bounce home
+  React.useEffect(() => {
+    let alive = true;
+    supa.auth.getSession().then(({ data }) => {
+      if (alive && data.session) nav('/');
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav]);
 
   async function loginPassword(e: React.FormEvent) {
     e.preventDefault();
+    setMsg(null);
     try {
       setLoading(true);
-      const { error } = await supa.auth.signInWithPassword({
-        email,
+      const emailNorm = email.trim().toLowerCase();
+
+      // 1) Try sign-in
+      const { error: siErr } = await supa.auth.signInWithPassword({
+        email: emailNorm,
         password: pwd,
       });
-      if (error) throw error;
-      // For password flow we can route straight in
-      nav("/");
+      if (!siErr) {
+        // Hard reload to ensure all queries refetch “me/users” like your old flow
+        window.location.replace('/');
+        return;
+      }
+
+      // 2) If invalid creds → sign-up
+      if (/invalid login credentials/i.test(siErr.message || '')) {
+        const { data: su, error: suErr } = await supa.auth.signUp({
+          email: emailNorm,
+          password: pwd,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        });
+        if (suErr) {
+          if (/already registered/i.test(suErr.message || '')) {
+            throw new Error('This email already exists. Check your password or reset it.');
+          }
+          throw suErr;
+        }
+        if (!su.session) {
+          setMsg('We sent a confirmation link. Check your email to finish sign up.');
+          return;
+        }
+        window.location.replace('/');
+        return;
+      }
+
+      throw siErr;
     } catch (err: any) {
-      showError("Login failed", err?.message || String(err));
+      setMsg(err?.message || 'Login failed. Try again.');
     } finally {
       setLoading(false);
     }
   }
 
   async function loginGoogle() {
+    setMsg(null);
     try {
       setLoading(true);
       const { error } = await supa.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo }, // absolute redirect
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw error;
-      // Redirect handled by Supabase > /auth/callback
-    } catch (err: any) {
-      showError("Google sign-in failed", err?.message || String(err));
+      // Supabase will redirect to /auth/callback
+    } catch (e: any) {
+      setMsg(e?.message || 'Google sign-in failed.');
       setLoading(false);
     }
   }
 
-  async function forgotPwd() {
-    if (!email) return showError("Oops", "Enter your email first");
+  async function forgotPwd(e: React.MouseEvent) {
+    e.preventDefault();
+    setMsg(null);
     try {
-      const { error } = await supa.auth.resetPasswordForEmail(email, {
-        redirectTo,
+      const emailNorm = email.trim().toLowerCase();
+      if (!emailNorm) {
+        setMsg('Enter your email first, then click “Forgot password”.');
+        return;
+      }
+      const { error } = await supa.auth.resetPasswordForEmail(emailNorm, {
+        redirectTo: `${window.location.origin}/auth/callback`,
       });
       if (error) throw error;
-      showSuccess("Email sent", "Check your inbox to reset your password.");
-    } catch (err: any) {
-      showError("Reset failed", err?.message || String(err));
+      setMsg('Password reset link sent. Check your email.');
+    } catch (e: any) {
+      setMsg(e?.message || 'Could not send reset email.');
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-6rem)] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-xl"
-      >
-        <h1 className="text-2xl font-semibold font-heading mb-1">Welcome back</h1>
-        <p className="text-sm opacity-70 mb-6">Log in to continue the heist.</p>
+    <div className="min-h-screen w-full grid place-items-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white/5 border border-white/10 p-6">
+        <h1 className="text-2xl font-semibold text-white mb-6">Sign in</h1>
 
-        <form onSubmit={loginPassword} className="space-y-3">
-          <div>
-            <label className="text-sm opacity-80">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-400"
+        <form onSubmit={loginPassword} className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-white/80">Email</Label>
+            <Input
               type="email"
+              autoComplete="email"
+              placeholder="you@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
             />
           </div>
-          <div>
-            <label className="text-sm opacity-80">Password</label>
-            <input
-              className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 outline-none focus:ring-2 focus:ring-cyan-400"
+
+          <div className="space-y-2">
+            <Label className="text-white/80">Password</Label>
+            <Input
               type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
               value={pwd}
               onChange={(e) => setPwd(e.target.value)}
-              required
-              autoComplete="current-password"
             />
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={forgotPwd}
+                className="text-sm text-teal-300 hover:text-teal-200"
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl py-2 font-medium border border-cyan-400/50 hover:border-cyan-400 transition shadow-[0_0_12px_rgba(59,240,255,.25)]"
-          >
-            {loading ? "Signing in�" : "Enter the Heist"}
-          </button>
+
+          {msg && <div className="text-sm text-amber-300">{msg}</div>}
+
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading ? 'Working...' : 'Sign in / Create account'}
+          </Button>
         </form>
 
-        {/* divider */}
-        <div className="relative my-5 text-center text-xs opacity-60">
-          <span className="before:content-[''] before:absolute before:left-0 before:top-1/2 before:h-px before:w-1/3 before:bg-white/20 after:content-[''] after:absolute after:right-0 after:top-1/2 after:h-px after:w-1/3 after:bg-white/20">
-            <span className="px-2 bg-transparent">or</span>
-          </span>
+        <div className="my-4 flex items-center gap-3 text-white/40">
+          <div className="h-px flex-1 bg-white/10" />
+          <span className="text-xs">or</span>
+          <div className="h-px flex-1 bg-white/10" />
         </div>
 
-        {/* Google button */}
-        <button
-          onClick={loginGoogle}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/20 bg-white/10 hover:bg-white/15 py-2 transition shadow-[0_0_10px_rgba(255,255,255,.08)]"
-        >
-          {/* Simple Google �G� mark */}
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21.35 11.1H12v2.9h5.33a5.5 5.5 0 1 1-2.34-6.02l2.05-2.05A8 8 0 1 0 20 12c0-.3-.02-.6-.05-.9h1.4z" />
-          </svg>
-          <span className="font-medium">Continue with Google</span>
-        </button>
-
-        <button
-          onClick={forgotPwd}
-          className="mt-4 w-full text-cyan-300 hover:text-cyan-200 text-sm underline underline-offset-4"
-        >
-          Forgot your password?
-        </button>
-      </motion.div>
+        <Button className="w-full" variant="secondary" onClick={loginGoogle} disabled={loading}>
+          Continue with Google
+        </Button>
+      </div>
     </div>
   );
 }
-

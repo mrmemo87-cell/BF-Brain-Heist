@@ -183,8 +183,8 @@ export const supaAPI: DataAPI = {
 
   // Leaderboard rows with avatars - hardened with defensive mapping
   async leaderboardRows(limit = 100) {
-    // Try RPC
-    const r = await supa.rpc('leaderboard_rows', { p_limit: limit })
+    // Try RPC with canonical params
+    const r = await supa.rpc('clans_leaderboard', { limit_count: limit })
     const rows = (!r.error && Array.isArray(r.data)) ? r.data : null
 
     const base = (rows ?? (

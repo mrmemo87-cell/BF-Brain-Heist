@@ -31,31 +31,13 @@ export default function LeaderboardPanel() {
   const rowsQ = useQuery({
     queryKey: ['leaderboardRows'],
     queryFn: async () => {
-      const r = await supa.rpc('leaderboard_rows', { p_limit: 100 })
-      if (!r.error && Array.isArray(r.data)) return r.data
-      // fallback (works if public SELECT policy exists on profiles)
-      const fb = await supa.from('profiles')
-        .select('id,username,avatar_url,batch,level,xp,coins,last_seen')
-        .order('xp', { ascending: false })
-        .order('level', { ascending: false })
-        .order('coins', { ascending: false })
-        .limit(100)
-      if (fb.error) throw fb.error
-      return (fb.data ?? []).map((p: any, i: number) => ({
-        user_id: p.id,
-        username: p.username,
-        avatar_url: p.avatar_url,
-        batch: p.batch,
-        level: p.level,
-        xp: p.xp,
-        coins: p.coins,
-        last_seen: p.last_seen,
-        clan_id: null,
-        clan_name: null,
-        rank: i + 1,
-      }))
+      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 })
+      if (r.error) throw r.error
+      return r.data ?? []
     },
     retry: 1,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   // clan rank map
@@ -66,7 +48,9 @@ export default function LeaderboardPanel() {
       if (r.error) throw r.error;
       const list = r.data ?? [];
       return Object.fromEntries(list.map((c:any)=>[c.id, c.rank]));
-    }
+    },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   const attack = async (defenderId:string, defenderData: any) => {

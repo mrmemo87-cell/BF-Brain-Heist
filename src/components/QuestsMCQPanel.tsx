@@ -24,6 +24,8 @@ export default function QuestsMCQPanel() {
   const next = useQuery({
     queryKey: ['mcqNext', subject],
     queryFn: () => dataAPI.mcqNext(subject ?? undefined),
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   const submit = useMutation({

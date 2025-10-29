@@ -62,7 +62,7 @@ const qc = new QueryClient({
 });
 
 export default function App() {
-  React.useEffect(() => installAuthLifecycle(qc), [qc]);
+  React.useEffect(() => installAuthLifecycle(qc), []);
 
   return (
     <QueryClientProvider client={qc}>
@@ -194,8 +194,8 @@ useHeartbeat(60_000); // 1 min
   React.useEffect(() => {
     if (!authReady) return;
     (window as any).smokeLB = async () => {
-      const r = await supa.rpc("leaderboard_rows", { p_limit: 5 });
-      console.log("leaderboard_rows:", r.error ?? r.data);
+      const r = await supa.rpc("clans_leaderboard", { limit_count: 50 });
+      console.log("clans_leaderboard:", r.error ?? r.data);
       return r;
     };
     return () => {
@@ -279,9 +279,9 @@ useHeartbeat(60_000); // 1 min
       try {
         // Primary: use the bootstrap RPC (recommended)
         const r = await supa.rpc("profile_bootstrap", {
-          p_avatar_url: payload.avatarUrl ?? null,
-          p_batch: payload.batch ?? null,
           p_username: payload.username ?? null,
+          p_batch: payload.batch ?? null,
+          p_avatar_url: payload.avatarUrl ?? null,
         });
         if (r.error) throw r.error;
 

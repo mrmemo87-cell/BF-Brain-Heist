@@ -12,6 +12,9 @@ export default function NewsPanel() {
     queryKey: ['newsFeedRich'],
     queryFn: () => api.newsFeedRich(20),
     refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 
   function hueFor(row: any) { // 5..80% -> green to red
