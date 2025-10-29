@@ -1,4 +1,4 @@
-import React from 'react'
+import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supa } from '../src/SupabaseClient'
 import { Button } from '../src/components/ui/Button'

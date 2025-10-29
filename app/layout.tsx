@@ -1,4 +1,5 @@
-﻿
+import * as React from 'react';
+
 import type { Metadata } from 'next';
 import { Providers } from '@/components/providers';
 import '@/styles/globals.css';
@@ -21,4 +22,5 @@ export default function RootLayout({
     </html>
   )
 }
+
 

@@ -1,5 +1,5 @@
-﻿// App.tsx
-import React from "react";
+import * as React from 'react';
+// App.tsx
 import {
   QueryClient,
   QueryClientProvider,
@@ -37,7 +37,7 @@ import SettingsPanel from "@/components/SettingsPanel";
 import NewsPanel from "@/components/NewsPanel";
 import IntroCinematic from "@/components/IntroCinematic";
 import HelpQuickstart from "@/components/HelpQuickstart";
-import FirstRunSetup from "@/components/FirstRunSetup"; // ✅ wired back
+import FirstRunSetup from "@/components/FirstRunSetup"; // ? wired back
 
 /** UI atoms/utils (in src/...) */
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar";
@@ -141,7 +141,7 @@ function Shell() {
   const [showIntro, setShowIntro] = React.useState(false);
   const [showHelp, setShowHelp] = React.useState(false);
 
-  // ✅ moved from top-level: hooks must run inside a component
+  // ? moved from top-level: hooks must run inside a component
   React.useEffect(() => {
     if (import.meta.env.DEV) {
       (window as any).supabase = supa;
@@ -161,7 +161,7 @@ function Shell() {
 }, [qc]);
 
 
-  // 🔥 Start session + refresh AP once auth is ready
+  // ?? Start session + refresh AP once auth is ready
   React.useEffect(() => {
     if (!authReady) return;
     let dead = false;
@@ -233,7 +233,7 @@ function Shell() {
     enabled: authReady,
   });
 
-  // ✅ detect if we should show FirstRunSetup
+  // ? detect if we should show FirstRunSetup
   const hasAvatar = !!(me?.avatarUrl || (me as any)?.avatar_url);
   const hasBatch =
     !!(me?.batch && ["8A", "8B", "8C"].includes(String(me.batch).toUpperCase()));
@@ -267,7 +267,7 @@ function Shell() {
     return () => clearInterval(id);
   }, [authReady]);
 
-  // —— First Run Setup modal state —— //
+  // �� First Run Setup modal state �� //
   const [showSetup, setShowSetup] = React.useState(false);
 
   React.useEffect(() => {
@@ -288,7 +288,7 @@ function Shell() {
         });
         if (r.error) throw r.error;
 
-        toast.success("Profile saved. Welcome to the heist 🎭");
+        toast.success("Profile saved. Welcome to the heist ??");
         setShowSetup(false);
         await qc.invalidateQueries({ queryKey: ["whoAmI"] });
       } catch (e: any) {
@@ -317,7 +317,7 @@ function Shell() {
   if (!authReady) {
     return (
       <div className="w-full h-screen grid place-items-center text-white">
-        Signing you in…
+        Signing you in�
       </div>
     );
   }
@@ -340,16 +340,16 @@ function Shell() {
                 {me?.username}
               </div>
               <div className="opacity-80 text-xs">
-                Batch {me?.batch ?? "—"} • L{me?.level} • {me?.xp} XP • {me?.coins} coins
+                Batch {me?.batch ?? "�"} � L{me?.level} � {me?.xp} XP � {me?.coins} coins
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button className="text-lg" onClick={() => sfx.toggle()}>
-              {sfx.enabled ? "🔉" : "🔇"}
+              {sfx.enabled ? "??" : "??"}
             </button>
             <button className="text-lg" onClick={() => setShowHelp(true)}>
-              ❓
+              ?
             </button>
             <LogoutButton />
           </div>
@@ -439,7 +439,7 @@ function Shell() {
       <IntroCinematic open={showIntro} onClose={() => setShowIntro(false)} />
       {showHelp && <HelpQuickstart onClose={() => setShowHelp(false)} />}
 
-      {/* ✅ First Run Setup modal — opens when profile incomplete */}
+      {/* ? First Run Setup modal � opens when profile incomplete */}
       {showSetup && (
         <FirstRunSetup
           open={showSetup}
@@ -484,7 +484,7 @@ function Dashboard({
   const jobStart = useMutation({
     mutationFn: (jobId: string) => dataAPI.jobStart(jobId, false),
     onSuccess: (j: any) =>
-      toast.success(`Job started → ends at ${new Date(j.endsAt).toLocaleTimeString()}`),
+      toast.success(`Job started > ends at ${new Date(j.endsAt).toLocaleTimeString()}`),
     onError: (e: any) => toast.error(e?.message ?? "Job failed"),
   });
 
@@ -499,7 +499,7 @@ function Dashboard({
   const upgrade = useMutation({
     mutationFn: (track: any) => dataAPI.upgrade(track),
     onSuccess: async (u: any) => {
-      toast.success(`Upgraded ${u.track} → level ${u.level}`);
+      toast.success(`Upgraded ${u.track} > level ${u.level}`);
       await qc.invalidateQueries({ queryKey: ["ap"] });
       await qc.invalidateQueries({ queryKey: ["whoAmI"] });
       await qc.invalidateQueries({ queryKey: ["upgrades"] });
@@ -512,12 +512,12 @@ function Dashboard({
       <section className="card-glass shimmer2 p-4">
         <h3 className="font-heading mb-2">Action Points</h3>
         {apLoading ? (
-          <div className="opacity-70 text-sm">Loading…</div>
+          <div className="opacity-70 text-sm">Loading�</div>
         ) : ap ? (
           <>
             <APAnimatedBar apNow={ap.apNow} apMax={ap.apMax} />
             <div className="text-sm opacity-80 mb-2">
-              {ap.apNow} / {ap.apMax} • +1 in ~{Math.ceil((ap.nextInMs || 0) / 1000)}s
+              {ap.apNow} / {ap.apMax} � +1 in ~{Math.ceil((ap.nextInMs || 0) / 1000)}s
             </div>
             <button
               className="rounded-xl px-3 py-2 border text-sm"
@@ -537,14 +537,14 @@ function Dashboard({
           onClick={() => pve.mutate("easy")}
         >
           <h4 className="font-heading mb-1">Run PvE (Easy)</h4>
-          <p className="text-sm opacity-70">2 AP • ~10 XP • ~50 coins</p>
+          <p className="text-sm opacity-70">2 AP � ~10 XP � ~50 coins</p>
         </button>
         <button
           className="card-glass shimmer2 p-4 text-left btn-neon"
           onClick={() => jobStart.mutate("2h")}
         >
           <h4 className="font-heading mb-1">Start Job (2h)</h4>
-          <p className="text-sm opacity-70">+150 coins • +15 XP</p>
+          <p className="text-sm opacity-70">+150 coins � +15 XP</p>
         </button>
         <button
           className="card-glass shimmer2 p-4 text-left btn-neon"
@@ -639,3 +639,4 @@ function PanelWrapper({ children }: { children: React.ReactNode }) {
     </motion.div>
   );
 }
+

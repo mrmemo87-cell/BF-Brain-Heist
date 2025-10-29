@@ -1,6 +1,6 @@
 ﻿
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card';
+import * as React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 const ShopPage: React.FC = () => {
   return (

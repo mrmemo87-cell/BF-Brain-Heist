@@ -1,5 +1,5 @@
 ﻿import '@/index.css'; // adjust path if your file lives elsewhere
-import React from 'react';
+import * as React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './src/App';
 

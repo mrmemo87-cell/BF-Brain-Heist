@@ -1,6 +1,7 @@
 ﻿// src/hooks/useHeartbeat.ts
-import { useEffect } from 'react';
+import * as React from 'react';
 import { supa } from '@/SupabaseClient';
+
 export function useHeartbeat(ms = 60_000) {
   React.useEffect(() => {
     const id = setInterval(() => {

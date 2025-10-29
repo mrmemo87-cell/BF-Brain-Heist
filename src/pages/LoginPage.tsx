@@ -1,13 +1,13 @@
-﻿import React, { useState } from "react";
+import * as React from 'react';
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supa } from "@/SupabaseClient";
 import { useToasts } from "@/store/toastStore";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [pwd, setPwd] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = React.useState("");
+  const [pwd, setPwd] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
   const nav = useNavigate();
   const { showError, showSuccess } = useToasts();
 
@@ -39,7 +39,7 @@ export default function LoginPage() {
         options: { redirectTo }, // absolute redirect
       });
       if (error) throw error;
-      // Redirect handled by Supabase → /auth/callback
+      // Redirect handled by Supabase > /auth/callback
     } catch (err: any) {
       showError("Google sign-in failed", err?.message || String(err));
       setLoading(false);
@@ -98,7 +98,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-xl py-2 font-medium border border-cyan-400/50 hover:border-cyan-400 transition shadow-[0_0_12px_rgba(59,240,255,.25)]"
           >
-            {loading ? "Signing in…" : "Enter the Heist"}
+            {loading ? "Signing in�" : "Enter the Heist"}
           </button>
         </form>
 
@@ -115,7 +115,7 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full flex items-center justify-center gap-3 rounded-xl border border-white/20 bg-white/10 hover:bg-white/15 py-2 transition shadow-[0_0_10px_rgba(255,255,255,.08)]"
         >
-          {/* Simple Google ‘G’ mark */}
+          {/* Simple Google �G� mark */}
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21.35 11.1H12v2.9h5.33a5.5 5.5 0 1 1-2.34-6.02l2.05-2.05A8 8 0 1 0 20 12c0-.3-.02-.6-.05-.9h1.4z" />
           </svg>
@@ -132,3 +132,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
