@@ -1,161 +1,268 @@
-﻿import React from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { supa } from '@/SupabaseClient'
-import { Button } from './ui/Button'
-import RaidResultModal from '@/components/RaidResultModal'
-import { useDataAPI } from '@/services/data'
+﻿// src/components/LeaderboardPanel.tsx
+import * as React from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supa } from '@/SupabaseClient';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/Avatar';
 
+type PlayerRow = {
+  user_id: string;
+  username: string | null;
+  batch: string | null;
+  level: number | null;
+  xp: number | null;
+  coins: number | null;
+  avatar_url: string | null;
+  last_seen: string | null;
+  presence: 'online' | 'idle' | 'away' | null;
+  presence_color: 'green' | 'yellow' | 'red' | null;
+  rank: number;
+};
 
-function useMe() {
-  const q = useQuery({
-    queryKey:['me'],
-    queryFn: async () => (await supa.auth.getUser()).data.user
-  });
-  return q.data;
+type ClanRow = {
+  clan_id: string;
+  clan_name: string;
+  member_count: number;
+  total_xp: number;
+  avg_level: number;
+  rank: number;
+};
+
+type Mode = 'players' | 'clans';
+type Batch = 'GLOBAL' | '8A' | '8B' | '8C';
+
+function timeAgo(iso?: string | null) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.max(0, Math.floor(diff / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m ago`;
 }
 
 export default function LeaderboardPanel() {
-  const me = useMe();
-  const dataAPI = useDataAPI();
-  const [raidModal, setRaidModal] = React.useState({
-    open: false,
-    attacker: { name: '', avatar: null },
-    defender: { name: '', avatar: null },
-    win: false,
-    coinsMoved: 0,
-    xp: 0,
-    pwin: 0,
-    stealPct: 0
-  });
+  const qc = useQueryClient();
+  const [uid, setUid] = React.useState<string | null>(null);
+  const [mode, setMode] = React.useState<Mode>('players');
+  const [batch, setBatch] = React.useState<Batch>('GLOBAL');
 
-  const rowsQ = useQuery({
-    queryKey: ['leaderboardRows'],
-    queryFn: async () => {
-      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 })
-      if (r.error) throw r.error
-      return r.data ?? []
-    },
-    retry: 1,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-  })
+  React.useEffect(() => {
+    let alive = true;
+    supa.auth.getUser().then(({ data }) => alive && setUid(data.user?.id ?? null));
+    // warm session on mount
+    supa.rpc('session_start').catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
-  // clan rank map
-  const clansQ = useQuery({
-    queryKey:['clansMap'],
+  const { data: ap = { ap_now: 0, ap_max: 0 } } = useQuery({
+    queryKey: ['ap-status'],
     queryFn: async () => {
-      const r = await supa.rpc('clans_leaderboard', { limit_count: 50 });
+      const r = await supa.rpc('ap_status');
       if (r.error) throw r.error;
-      const list = r.data ?? [];
-      return Object.fromEntries(list.map((c:any)=>[c.id, c.rank]));
+      return r.data ?? { ap_now: 0, ap_max: 0 };
     },
+    enabled: mode === 'players',
+    refetchInterval: 20000,
     refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
   });
 
-  const attack = async (defenderId:string, defenderData: any) => {
-    try {
-      const result = await dataAPI.raidAttack(defenderId);
+  const fetchKey = ['leaderboard', mode, batch];
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: fetchKey,
+    queryFn: async () => {
+      const payload: any = { limit_count: 50 };
+      if (batch !== 'GLOBAL') payload.p_batch = batch;
+      if (mode === 'players') {
+        const r = await supa.rpc('leaderboard_players', payload);
+        if (r.error) throw r.error;
+        return (r.data as PlayerRow[]) ?? [];
+      } else {
+        const r = await supa.rpc('leaderboard_clans', payload);
+        if (r.error) throw r.error;
+        return (r.data as ClanRow[]) ?? [];
+      }
+    },
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+  });
 
-      setRaidModal({
-        open: true,
-        attacker: { name: me?.user_metadata?.full_name || 'You', avatar: null },
-        defender: { name: defenderData.username, avatar: defenderData.avatar_url },
-        win: result.win,
-        coinsMoved: result.defenderCoinLoss || result.coins || 0,
-        xp: result.xp,
-        pwin: parseFloat((result.message?.match(/P\(win\)=([0-9.]+)/)?.[1] ?? '0.5')),
-        stealPct: (parseFloat((result.message?.match(/В· ([0-9]+)% swing/)?.[1] ?? '0'))/100)
-      });
+  const attack = useMutation({
+    mutationFn: async (defenderId: string) => {
+      const r = await supa.rpc('raid_attack', { defender_id: defenderId });
+      if (r.error) throw r.error;
+      return r.data;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['ap-status'] });
+      await qc.invalidateQueries({ queryKey: fetchKey as any });
+    },
+  });
 
-      // refetch data
-      rowsQ.refetch();
-    } catch (error) {
-      console.error('Attack failed:', error);
-      alert(`Attack failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
+  React.useEffect(() => {
+    const cb = () => {
+      if (document.visibilityState === 'visible') {
+        supa.rpc('session_start').finally(() => refetch());
+      }
+    };
+    document.addEventListener('visibilitychange', cb);
+    return () => document.removeEventListener('visibilitychange', cb);
+  }, [refetch]);
 
-  if (rowsQ.isLoading)
-    return (
-      <div className="space-y-3">
-        <div className="h-5 bg-white/10 rounded animate-pulse w-2/3" />
-        <div className="h-5 bg-white/10 rounded animate-pulse w-5/6" />
-        <div className="h-5 bg-white/10 rounded animate-pulse w-4/6" />
-      </div>
-    )
-
-  if (rowsQ.isError)
-    return (
-      <div className="text-red-400 text-sm p-3 border border-red-500/30 rounded-xl">
-        Failed to load leaderboard. {(rowsQ.error as any)?.message ?? 'RPC/network error'}
-      </div>
-    )
-
-  const rows = Array.isArray(rowsQ.data) ? rowsQ.data : []
+  const headerGradient = 'from-cyan-500/5 via-fuchsia-500/5 to-amber-500/5';
 
   return (
-    <>
-      <ul className="divide-y divide-white/10">
-        {rows.map((r: any, i: number) => {
-          const last = r?.last_seen ? new Date(r.last_seen) : null
-          const dot =
-            !last
-              ? '#666'
-              : Date.now() - last.getTime() <= 20 * 60 * 1000
-              ? '#22c55e'
-              : Date.now() - last.getTime() <= 60 * 60 * 1000
-              ? '#f59e0b'
-              : '#ef4444'
+    <div className="p-4 space-y-4">
+      {/* Header / Filters */}
+      <div className={`rounded-2xl border border-white/10 bg-gradient-to-r ${headerGradient} p-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-white/80">
+            <div className="text-lg font-semibold">
+              {mode === 'players' ? 'Agents Leaderboard' : 'Clans Leaderboard'}
+            </div>
+            {mode === 'players' && (
+              <div className="text-sm text-white/60">AP: {ap.ap_now ?? 0} / {ap.ap_max ?? 0}</div>
+            )}
+          </div>
 
-          const mine = me?.id === r.user_id;
-          const myBatch = (me as any)?.user_metadata?.batch || (me as any)?.batch;
-          const canAttack = !mine && r.batch && r.batch !== myBatch; // Can't attack users in same batch
+          <div className="flex flex-wrap gap-2">
+            {/* Mode */}
+            <div className="bg-white/10 rounded-xl p-1 flex">
+              {(['players','clans'] as Mode[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-3 py-1 rounded-lg text-sm transition
+                    ${mode === m ? 'bg-white/90 text-black' : 'text-white hover:bg-white/20'}`}
+                >
+                  {m === 'players' ? 'Players' : 'Clans'}
+                </button>
+              ))}
+            </div>
 
-          const rank = r.clan_id ? (clansQ.data?.[r.clan_id] ?? 'вЂ”') : null;
+            {/* Batch */}
+            <div className="bg-white/10 rounded-xl p-1 flex">
+              {(['GLOBAL','8A','8B','8C'] as Batch[]).map(b => (
+                <button
+                  key={b}
+                  onClick={() => setBatch(b)}
+                  className={`px-3 py-1 rounded-lg text-sm transition
+                    ${batch === b ? 'bg-white/90 text-black' : 'text-white hover:bg-white/20'}`}
+                >
+                  {b === 'GLOBAL' ? 'Global' : b}
+                </button>
+              ))}
+            </div>
 
-          return (
-            <li key={r?.user_id ?? i} className="py-3 flex items-center gap-3">
-              <img
-                src={r?.avatar_url || '/avatar-placeholder.png'}
-                onError={(e: any) => {
-                  e.currentTarget.src = '/avatar-placeholder.png'
-                }}
-                className="w-8 h-8 rounded-lg object-cover"
-                alt=""
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{r?.username ?? 'agent'}</span>
-                  {r?.clan_name && <span className="text-xs opacity-70">вЂў {r.clan_name}{rank ? ` (#${rank})` : ''}</span>}
-                </div>
-                <div className="text-xs opacity-70 truncate">
-                  L{Number(r?.level ?? 1)} В· {Number(r?.xp ?? 0)} XP В· {Number(r?.coins ?? 0)} coins
+            <button
+              className="px-3 py-1 rounded-lg bg-white/10 text-white hover:bg-white/20"
+              onClick={() => refetch()}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* States */}
+      {isLoading && <div className="p-6 text-white/70">Loading…</div>}
+      {!isLoading && error && <div className="p-6 text-rose-400">Failed to load.</div>}
+      {!isLoading && !error && Array.isArray(data) && data.length === 0 && (
+        <div className="text-white/60 p-6">No entries yet.</div>
+      )}
+
+      {/* Players */}
+      {!isLoading && !error && mode === 'players' && Array.isArray(data) && data.length > 0 && (
+        <div className="space-y-3">
+          {(data as PlayerRow[]).map((r) => {
+            const displayName = (r.username && r.username.trim().length ? r.username : 'agent');
+            const canAttack = !!uid && uid !== r.user_id && ((ap.ap_now ?? 0) >= 2);
+            const isMe = uid === r.user_id;
+            const dotColor =
+              r.presence_color === 'green' ? 'bg-emerald-400' :
+              r.presence_color === 'yellow' ? 'bg-amber-300' :
+              'bg-rose-400';
+
+            return (
+              <div key={r.user_id} className="group rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition p-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 text-center text-white/60 font-mono">#{r.rank}</div>
+
+                  <div className="relative">
+                    <Avatar className="h-12 w-12 ring-1 ring-white/20">
+                      <AvatarImage src={r.avatar_url ?? undefined} />
+                      <AvatarFallback className="bg-white/10 text-white">
+                        {displayName.slice(0,2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span
+                      className={`absolute -right-1 -bottom-1 h-3 w-3 rounded-full ring-2 ring-black/40 ${dotColor}`}
+                      title={r.presence ?? 'away'}
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`truncate ${isMe ? 'text-teal-300' : 'text-white'}`}>
+                        {displayName}
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80">
+                        {r.batch || '—'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-white/60">
+                      L{r.level ?? 1} • {r.xp ?? 0} XP • {r.coins ?? 0} coins
+                      <span className="mx-2">•</span>
+                      <span title={r.last_seen || ''}>seen {timeAgo(r.last_seen)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => attack.mutate(r.user_id)}
+                    disabled={!canAttack || attack.isPending}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition
+                      ${canAttack
+                        ? 'bg-teal-500 hover:bg-teal-400 text-white shadow-sm'
+                        : 'bg-white/15 text-white/60 cursor-not-allowed'
+                      }`}
+                    title={
+                      isMe ? 'That’s you' :
+                      (ap.ap_now ?? 0) < 2 ? 'Not enough AP (need 2)' :
+                      'Attack'
+                    }
+                  >
+                    {attack.isPending ? 'Attacking…' : isMe ? 'You' : 'Attack'}
+                  </button>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {canAttack ? (
-                <Button className="px-3 py-1 rounded-xl" onClick={()=>attack(r.user_id, r)}>Attack</Button>
-              ) : (
-                <span className="text-[11px] opacity-50">No PvP</span>
-              )}
-
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: dot }}
-                title={last ? last.toLocaleString() : 'unknown'}
-              />
-            </li>
-          )
-        })}
-      </ul>
-      <RaidResultModal
-        {...raidModal}
-        onClose={() => setRaidModal(m => ({...m, open: false}))}
-      />
-    </>
-  )
+      {/* Clans */}
+      {!isLoading && !error && mode === 'clans' && Array.isArray(data) && data.length > 0 && (
+        <div className="space-y-3">
+          {(data as ClanRow[]).map((r) => (
+            <div key={r.clan_id} className="group rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 text-center text-white/60 font-mono">#{r.rank}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-white font-medium">{r.clan_name}</div>
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80">
+                      {r.member_count} members
+                    </span>
+                  </div>
+                  <div className="text-sm text-white/60">
+                    Total XP {r.total_xp ?? 0} • Avg L{Number(r.avg_level ?? 1).toFixed(1)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
-
-
-
