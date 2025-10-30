@@ -1,142 +1,135 @@
-import React from 'react'
+import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supa } from '@/SupabaseClient'
 import AnimatedBackground from '@/components/common/AnimatedBackground'
 
-async function ensureProfile() {
-  const s = await supa.auth.getSession()
-  const uid = s.data.session?.user?.id
-  if (!uid) return
-  const { data } = await supa.rpc('whoami_profile').catch(() => ({ data: null }))
-  if (data && data[0]) return
-  await supa.rpc('profile_bootstrap_with_uid', { p_user_id: uid }).catch(() => {})
-}
-
 export default function LoginPage() {
-  const nav = useNavigate()
+  const navigate = useNavigate()
   const [email, setEmail] = React.useState('')
   const [pass, setPass]   = React.useState('')
-  const [ml, setMl]       = React.useState('')
-  const [busy, setBusy]   = React.useState<'none'|'pwd'|'ml'|'google'>('none')
-  const callbackUrl = `${window.location.origin}/auth/callback`
+  const [batch, setBatch] = React.useState<'8A'|'8B'|'8C'>('8A')
+  const [busy, setBusy]   = React.useState(false)
 
-  const goIn = async () => {
-    await ensureProfile()
-    nav('/leaderboard', { replace: true })
+  React.useEffect(() => {
+    // already signed in? go in
+    supa.auth.getSession().then(s => {
+      if (s.data.session) navigate('/leaderboard', { replace: true })
+    })
+  }, [navigate])
+
+  async function waitForSession(maxMs = 3000) {
+    const t0 = Date.now()
+    while (Date.now() - t0 < maxMs) {
+      const s = await supa.auth.getSession()
+      if (s.data.session) return s.data.session
+      await new Promise(r => setTimeout(r, 120))
+    }
+    return null
   }
 
-  const onEmailPassword = async (e: React.FormEvent) => {
+  async function bootstrapProfile(chosen: '8A'|'8B'|'8C' | null) {
+    const s = await supa.auth.getSession()
+    const uid = s.data.session?.user?.id
+    if (!uid) return
+    await supa.rpc('profile_bootstrap_with_uid', {
+      p_user_id: uid,
+      p_username: null,
+      p_batch: chosen,   // sets once, locked by trigger
+      p_avatar_url: null
+    })
+  }
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setBusy('pwd')
+    setBusy(true)
     try {
-      // 1) try sign-in
-      const r1 = await supa.auth.signInWithPassword({ email, password: pass })
-      if (r1.error) {
-        // 2) auto-signup if not found / invalid creds
-        const shouldSignup =
-          /invalid|not.*found|email.*exists/i.test(r1.error.message) ||
-          r1.error.status === 400
+      // 1) try sign-in first (existing users)
+      let r = await supa.auth.signInWithPassword({ email, password: pass })
 
-        if (!shouldSignup) throw r1.error
+      if (r.error) {
+        // 2) not signed up yet? create account
+        const looksLikeNoAccount =
+          r.error.status === 400 || /invalid|not.*found/i.test(r.error.message)
+        if (!looksLikeNoAccount) throw r.error
 
-        const r2 = await supa.auth.signUp({
-          email,
-          password: pass,
-          options: { emailRedirectTo: callbackUrl }
-        })
-        if (r2.error) throw r2.error
+        const up = await supa.auth.signUp({ email, password: pass })
+        if (up.error) {
+          // surface the real 422 reason (password policy, signup disabled, etc.)
+          throw up.error
+        }
+        await waitForSession() // some projects need a beat here
+        // first time: set batch now
+        await bootstrapProfile(batch)
+      } else {
+        // existing account: ensure profile exists; DO NOT change batch
+        await bootstrapProfile(null)
       }
 
-      // wait till session is actually present
-      for (let i = 0; i < 10; i++) {
-        const s = await supa.auth.getSession()
-        if (s.data.session) break
-        await new Promise(r => setTimeout(r, 150))
-      }
+      // go in
+      navigate('/leaderboard', { replace: true })
 
-      await goIn()
     } catch (err: any) {
-      alert(err?.message ?? 'Sign-in failed')
+      alert(err?.message ?? 'Authentication failed')
     } finally {
-      setBusy('none')
-    }
-  }
-
-  const onMagic = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setBusy('ml')
-    try {
-      const { error } = await supa.auth.signInWithOtp({
-        email: ml,
-        options: { emailRedirectTo: callbackUrl }
-      })
-      if (error) throw error
-      alert('Magic link sent. Check your email ✉️')
-    } catch (err: any) {
-      alert(err?.message ?? 'Could not send magic link')
-    } finally {
-      setBusy('none')
-    }
-  }
-
-  const onGoogle = async () => {
-    setBusy('google')
-    try {
-      const { error } = await supa.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: callbackUrl }
-      })
-      if (error) throw error
-      // redirects out; no finally path here
-    } catch (err: any) {
-      alert(err?.message ?? 'Google sign-in failed')
-      setBusy('none')
+      setBusy(false)
     }
   }
 
   return (
-    <div className="relative min-h-dvh">
+    <div className="relative min-h-dvh text-white">
       <AnimatedBackground />
       <div className="absolute inset-0 grid place-items-center p-4">
         <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/40 backdrop-blur p-6">
-          <h1 className="text-2xl font-semibold mb-6">Sign in</h1>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Email & Password */}
-            <form onSubmit={onEmailPassword} className="space-y-3">
-              <div className="text-sm opacity-80">Email & Password</div>
-              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
-                     type="email" placeholder="you@school.kg"
-                     value={email} onChange={e=>setEmail(e.target.value)} required />
-              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
-                     type="password" placeholder="••••••••"
-                     value={pass} onChange={e=>setPass(e.target.value)} required />
-              <button disabled={busy!=='none'} className="w-full rounded-lg py-2 bg-teal-500/80 hover:bg-teal-500 transition">
-                {busy==='pwd' ? 'Working…' : 'Enter'}
-              </button>
-              <div className="text-right text-xs opacity-70">
-                Forgot password? Use Magic Link → 
-              </div>
-            </form>
-
-            {/* Magic Link + Google */}
-            <form onSubmit={onMagic} className="space-y-3">
-              <div className="text-sm opacity-80">Magic Link</div>
-              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
-                     type="email" placeholder="you@school.kg"
-                     value={ml} onChange={e=>setMl(e.target.value)} />
-              <button disabled={busy!=='none'} className="w-full rounded-lg py-2 bg-white/15 hover:bg-white/25 transition">
-                {busy==='ml' ? 'Sending…' : 'Send Magic Link'}
-              </button>
-              <div className="relative my-3 text-center text-xs opacity-60">
-                <span className="px-2 bg-black/40">or</span>
-              </div>
-              <button type="button" onClick={onGoogle} disabled={busy!=='none'}
-                      className="w-full rounded-lg py-2 bg-white/10 hover:bg-white/20 transition">
-                {busy==='google' ? 'Opening Google…' : 'Continue with Google'}
-              </button>
-            </form>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-semibold">Brain Heist</h1>
           </div>
+
+          <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <label className="text-sm opacity-80">Email</label>
+              <input
+                type="email" required
+                className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
+                placeholder="you@school.kg"
+                value={email} onChange={e=>setEmail(e.target.value)}
+              />
+              <label className="text-sm opacity-80">Password</label>
+              <input
+                type="password" required
+                className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
+                placeholder="••••••••"
+                value={pass} onChange={e=>setPass(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-sm opacity-80">Choose your Batch (for new accounts)</div>
+              <div className="flex gap-2">
+                {(['8A','8B','8C'] as const).map(b => (
+                  <button
+                    key={b} type="button"
+                    onClick={()=>setBatch(b)}
+                    className={`px-3 py-2 rounded-lg border ${
+                      batch===b ? 'bg-white text-black border-white' : 'bg-white/10 hover:bg-white/20 border-white/20'
+                    }`}
+                    title="This choice is permanent for new accounts"
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs opacity-70">
+                New users: batch is set on first login and cannot be changed.
+              </p>
+
+              <button
+                disabled={busy}
+                className="w-full mt-3 rounded-lg py-2 bg-teal-500/90 hover:bg-teal-500 text-black font-medium transition disabled:opacity-50"
+              >
+                {busy ? 'Authenticating…' : 'Sign in / Create account'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
