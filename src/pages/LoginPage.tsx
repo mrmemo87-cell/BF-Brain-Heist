@@ -1,148 +1,144 @@
-import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supa, ensureProfile } from '@/SupabaseClient';
+import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supa } from '@/SupabaseClient'
+import AnimatedBackground from '@/components/common/AnimatedBackground'
+
+async function ensureProfile() {
+  const s = await supa.auth.getSession()
+  const uid = s.data.session?.user?.id
+  if (!uid) return
+  const { data } = await supa.rpc('whoami_profile').catch(() => ({ data: null }))
+  if (data && data[0]) return
+  await supa.rpc('profile_bootstrap_with_uid', { p_user_id: uid }).catch(() => {})
+}
 
 export default function LoginPage() {
-  const nav = useNavigate();
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [msg, setMsg] = React.useState<string | null>(null);
+  const nav = useNavigate()
+  const [email, setEmail] = React.useState('')
+  const [pass, setPass]   = React.useState('')
+  const [ml, setMl]       = React.useState('')
+  const [busy, setBusy]   = React.useState<'none'|'pwd'|'ml'|'google'>('none')
+  const callbackUrl = `${window.location.origin}/auth/callback`
 
-  async function goDashboard() {
-    await ensureProfile();
-    // Tiny delay so UI can repaint
-    await new Promise(r => setTimeout(r, 60));
-    nav('/dashboard', { replace: true });
+  const goIn = async () => {
+    await ensureProfile()
+    nav('/leaderboard', { replace: true })
   }
 
-  async function handleEmailPassword() {
-    setBusy(true); setMsg(null);
+  const onEmailPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy('pwd')
     try {
-      // 1) Try normal sign-in
-      let { data, error } = await supa.auth.signInWithPassword({ email, password });
-      if (!error && data?.session) return goDashboard();
+      // 1) try sign-in
+      const r1 = await supa.auth.signInWithPassword({ email, password: pass })
+      if (r1.error) {
+        // 2) auto-signup if not found / invalid creds
+        const shouldSignup =
+          /invalid|not.*found|email.*exists/i.test(r1.error.message) ||
+          r1.error.status === 400
 
-      // 2) If bad creds → create the account then sign-in
-      const bad = error?.message?.toLowerCase() || '';
-      const looksNew = bad.includes('invalid') || bad.includes('not allowed') || bad.includes('no user');
+        if (!shouldSignup) throw r1.error
 
-      if (looksNew) {
-        const signUp = await supa.auth.signUp({
+        const r2 = await supa.auth.signUp({
           email,
-          password,
-          options: {
-            // hash/PKCE callback is handled in App.tsx already
-            emailRedirectTo: `${window.location.origin}/auth/callback`
-          }
-        });
-
-        // If confirmations are disabled, we get a session instantly
-        if (signUp.data.session) return goDashboard();
-
-        // If confirmations are ON, at least don’t hang
-        setMsg('We created your account. Check your inbox to confirm then sign in.');
-        return;
+          password: pass,
+          options: { emailRedirectTo: callbackUrl }
+        })
+        if (r2.error) throw r2.error
       }
 
-      setMsg(error?.message || 'Could not sign in. Try again.');
-    } catch (e: any) {
-      setMsg(e?.message || 'Something went wrong.');
+      // wait till session is actually present
+      for (let i = 0; i < 10; i++) {
+        const s = await supa.auth.getSession()
+        if (s.data.session) break
+        await new Promise(r => setTimeout(r, 150))
+      }
+
+      await goIn()
+    } catch (err: any) {
+      alert(err?.message ?? 'Sign-in failed')
     } finally {
-      setBusy(false);
+      setBusy('none')
     }
   }
 
-  async function handleGoogle() {
-    setBusy(true); setMsg(null);
+  const onMagic = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy('ml')
+    try {
+      const { error } = await supa.auth.signInWithOtp({
+        email: ml,
+        options: { emailRedirectTo: callbackUrl }
+      })
+      if (error) throw error
+      alert('Magic link sent. Check your email ✉️')
+    } catch (err: any) {
+      alert(err?.message ?? 'Could not send magic link')
+    } finally {
+      setBusy('none')
+    }
+  }
+
+  const onGoogle = async () => {
+    setBusy('google')
     try {
       const { error } = await supa.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` }
-      });
-      if (error) setMsg(error.message);
-      // Redirect handled by Supabase
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleMagicLink() {
-    setBusy(true); setMsg(null);
-    try {
-      const { error } = await supa.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
-      });
-      if (error) setMsg(error.message);
-      else setMsg('Magic link sent. Check your inbox 📩');
-    } finally {
-      setBusy(false);
+        options: { redirectTo: callbackUrl }
+      })
+      if (error) throw error
+      // redirects out; no finally path here
+    } catch (err: any) {
+      alert(err?.message ?? 'Google sign-in failed')
+      setBusy('none')
     }
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-[radial-gradient(80%_120%_at_50%_-20%,#0ea5e9_0%,transparent_60%),radial-gradient(80%_120%_at_90%_20%,#a855f7_0%,#0b1220_60%)]">
-      <div className="w-[92vw] max-w-[560px] rounded-2xl border border-white/10 bg-black/40 backdrop-blur p-6 text-white">
-        <h1 className="text-2xl font-semibold mb-4">Sign in</h1>
+    <div className="relative min-h-dvh">
+      <AnimatedBackground />
+      <div className="absolute inset-0 grid place-items-center p-4">
+        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/40 backdrop-blur p-6">
+          <h1 className="text-2xl font-semibold mb-6">Sign in</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Email & Password */}
-          <div>
-            <div className="text-sm mb-2 text-white/70">Email & Password</div>
-            <input
-              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-2 outline-none focus:border-white/20"
-              placeholder="Email"
-              type="email"
-              autoComplete="email"
-              value={email} onChange={e=>setEmail(e.target.value)}
-            />
-            <input
-              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-3 outline-none focus:border-white/20"
-              placeholder="Password"
-              type="password"
-              autoComplete="current-password"
-              value={password} onChange={e=>setPassword(e.target.value)}
-            />
-            <button
-              onClick={handleEmailPassword}
-              disabled={busy || !email || !password}
-              className="w-full rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-medium py-2"
-            >
-              {busy ? 'Working…' : 'Sign in / Create account'}
-            </button>
-          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Email & Password */}
+            <form onSubmit={onEmailPassword} className="space-y-3">
+              <div className="text-sm opacity-80">Email & Password</div>
+              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
+                     type="email" placeholder="you@school.kg"
+                     value={email} onChange={e=>setEmail(e.target.value)} required />
+              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
+                     type="password" placeholder="••••••••"
+                     value={pass} onChange={e=>setPass(e.target.value)} required />
+              <button disabled={busy!=='none'} className="w-full rounded-lg py-2 bg-teal-500/80 hover:bg-teal-500 transition">
+                {busy==='pwd' ? 'Working…' : 'Enter'}
+              </button>
+              <div className="text-right text-xs opacity-70">
+                Forgot password? Use Magic Link → 
+              </div>
+            </form>
 
-          {/* Magic link */}
-          <div>
-            <div className="text-sm mb-2 text-white/70">Magic Link</div>
-            <input
-              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-3 outline-none focus:border-white/20"
-              placeholder="Email"
-              type="email"
-              value={email} onChange={e=>setEmail(e.target.value)}
-            />
-            <button
-              onClick={handleMagicLink}
-              disabled={busy || !email}
-              className="w-full rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 py-2"
-            >
-              {busy ? 'Sending…' : 'Send magic link'}
-            </button>
-
-            <div className="my-4 h-px bg-white/10" />
-            <button
-              onClick={handleGoogle}
-              disabled={busy}
-              className="w-full rounded-lg bg-white text-black font-medium py-2 hover:bg-white/90 disabled:opacity-50"
-            >
-              Continue with Google
-            </button>
+            {/* Magic Link + Google */}
+            <form onSubmit={onMagic} className="space-y-3">
+              <div className="text-sm opacity-80">Magic Link</div>
+              <input className="w-full rounded-lg bg-white/10 px-3 py-2 outline-none"
+                     type="email" placeholder="you@school.kg"
+                     value={ml} onChange={e=>setMl(e.target.value)} />
+              <button disabled={busy!=='none'} className="w-full rounded-lg py-2 bg-white/15 hover:bg-white/25 transition">
+                {busy==='ml' ? 'Sending…' : 'Send Magic Link'}
+              </button>
+              <div className="relative my-3 text-center text-xs opacity-60">
+                <span className="px-2 bg-black/40">or</span>
+              </div>
+              <button type="button" onClick={onGoogle} disabled={busy!=='none'}
+                      className="w-full rounded-lg py-2 bg-white/10 hover:bg-white/20 transition">
+                {busy==='google' ? 'Opening Google…' : 'Continue with Google'}
+              </button>
+            </form>
           </div>
         </div>
-
-        {msg && <div className="mt-4 text-sm text-white/80">{msg}</div>}
       </div>
     </div>
-  );
+  )
 }
