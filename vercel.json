@@ -1,4 +1,7 @@
 {
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/auth/v1/(.*)", "destination": "/auth/callback" },
     { "source": "/auth/(verify|confirm)/(.*)", "destination": "/auth/callback" },
