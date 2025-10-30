@@ -1,247 +1,146 @@
-// src/pages/LoginPage.tsx
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supa } from '@/SupabaseClient';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-
-type Mode = 'password' | 'magic';
 
 export default function LoginPage() {
   const nav = useNavigate();
-
-  // UI state
-  const [mode, setMode] = React.useState<Mode>('password');
   const [email, setEmail] = React.useState('');
-  const [pwd, setPwd] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
+  const [password, setPassword] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
-  // If already signed in, bounce home
-  React.useEffect(() => {
-    let alive = true;
-    supa.auth
-      .getSession()
-      .then(({ data }) => {
-        if (alive && data.session) nav('/');
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-    // NOTE: do not add `supa` as a dependency (prevents tab-switch deadlocks)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav]);
-
-  // --- Handlers -------------------------------------------------------------
-
-  async function onSubmitPassword(e: React.FormEvent) {
-  e.preventDefault();
-  if (loading) return;
-  setMsg(null);
-  setLoading(true);
-
-  try {
-    const emailNorm = email.trim().toLowerCase();
-    if (!emailNorm || !pwd) {
-      setMsg('Email and password are required.');
-      return;
-    }
-
-    // 1) Try normal login
-    const { data: siData, error: siErr } = await supa.auth.signInWithPassword({
-      email: emailNorm,
-      password: pwd,
-    });
-    if (!siErr && siData.session) {
-      window.location.replace('/'); // you’re in
-      return;
-    }
-
-    // 2) If creds wrong or user not found → create account
-    const { data: suData, error: suErr } = await supa.auth.signUp({
-      email: emailNorm,
-      password: pwd,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (suErr) throw suErr;
-
-    // With "Confirm email" OFF, Supabase returns a session immediately.
-    if (suData.session) {
-      window.location.replace('/');
-      return;
-    }
-
-    // (safety) If no session returned for any reason, force a login now
-    const { data: si2, error: si2Err } = await supa.auth.signInWithPassword({
-      email: emailNorm,
-      password: pwd,
-    });
-    if (si2Err || !si2.session) throw si2Err || new Error('Could not start session.');
-    window.location.replace('/');
-  } catch (err: any) {
-    setMsg(err?.message || 'Login failed. Try again.');
-  } finally {
-    setLoading(false);
+  async function goDashboard() {
+    // Tiny delay so UI can repaint
+    await new Promise(r => setTimeout(r, 60));
+    nav('/dashboard', { replace: true });
   }
-}
 
-
-  async function onSubmitMagic(e: React.FormEvent) {
-    e.preventDefault();
-    if (loading) return;
-    setMsg(null);
-    setLoading(true);
+  async function handleEmailPassword() {
+    setBusy(true); setMsg(null);
     try {
-      const emailNorm = email.trim().toLowerCase();
-      if (!emailNorm) {
-        setMsg('Enter your email first.');
+      // 1) Try normal sign-in
+      let { data, error } = await supa.auth.signInWithPassword({ email, password });
+      if (!error && data?.session) return goDashboard();
+
+      // 2) If bad creds → create the account then sign-in
+      const bad = error?.message?.toLowerCase() || '';
+      const looksNew = bad.includes('invalid') || bad.includes('not allowed') || bad.includes('no user');
+
+      if (looksNew) {
+        const signUp = await supa.auth.signUp({
+          email,
+          password,
+          options: {
+            // hash/PKCE callback is handled in App.tsx already
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
+        });
+
+        // If confirmations are disabled, we get a session instantly
+        if (signUp.data.session) return goDashboard();
+
+        // If confirmations are ON, at least don’t hang
+        setMsg('We created your account. Check your inbox to confirm then sign in.');
         return;
       }
-      // Always sends an email (and creates the user if needed)
-      const { error } = await supa.auth.signInWithOtp({
-        email: emailNorm,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-      setMsg('Magic link sent. Check your inbox ✉️');
-    } catch (err: any) {
-      setMsg(err?.message || 'Could not send magic link.');
+
+      setMsg(error?.message || 'Could not sign in. Try again.');
+    } catch (e: any) {
+      setMsg(e?.message || 'Something went wrong.');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  async function onGoogle() {
-    if (loading) return;
-    setMsg(null);
-    setLoading(true);
+  async function handleGoogle() {
+    setBusy(true); setMsg(null);
     try {
       const { error } = await supa.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
       });
-      if (error) throw error;
-      // Redirect happens automatically
-    } catch (err: any) {
-      setMsg(err?.message || 'Google sign-in failed.');
-      setLoading(false);
+      if (error) setMsg(error.message);
+      // Redirect handled by Supabase
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function onForgot(e: React.MouseEvent) {
-    e.preventDefault();
-    if (loading) return;
-    setMsg(null);
+  async function handleMagicLink() {
+    setBusy(true); setMsg(null);
     try {
-      const emailNorm = email.trim().toLowerCase();
-      if (!emailNorm) {
-        setMsg('Enter your email first, then click “Forgot password”.');
-        return;
-      }
-      const { error } = await supa.auth.resetPasswordForEmail(emailNorm, {
-        redirectTo: `${window.location.origin}/auth/callback`,
+      const { error } = await supa.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
       });
-      if (error) throw error;
-      setMsg('Password reset link sent. Check your email.');
-    } catch (err: any) {
-      setMsg(err?.message || 'Could not send reset email.');
+      if (error) setMsg(error.message);
+      else setMsg('Magic link sent. Check your inbox 📩');
+    } finally {
+      setBusy(false);
     }
   }
-
-  // --- UI -------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen w-full grid place-items-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white/5 border border-white/10 p-6">
-        <h1 className="text-2xl font-semibold text-white mb-6">Sign in</h1>
+    <div className="min-h-screen grid place-items-center bg-[radial-gradient(80%_120%_at_50%_-20%,#0ea5e9_0%,transparent_60%),radial-gradient(80%_120%_at_90%_20%,#a855f7_0%,#0b1220_60%)]">
+      <div className="w-[92vw] max-w-[560px] rounded-2xl border border-white/10 bg-black/40 backdrop-blur p-6 text-white">
+        <h1 className="text-2xl font-semibold mb-4">Sign in</h1>
 
-        {/* Mode Switch */}
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={mode === 'password' ? 'default' : 'secondary'}
-            onClick={() => setMode('password')}
-          >
-            Email & Password
-          </Button>
-          <Button
-            type="button"
-            variant={mode === 'magic' ? 'default' : 'secondary'}
-            onClick={() => setMode('magic')}
-          >
-            Magic Link
-          </Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Email & Password */}
+          <div>
+            <div className="text-sm mb-2 text-white/70">Email & Password</div>
+            <input
+              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-2 outline-none focus:border-white/20"
+              placeholder="Email"
+              type="email"
+              autoComplete="email"
+              value={email} onChange={e=>setEmail(e.target.value)}
+            />
+            <input
+              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-3 outline-none focus:border-white/20"
+              placeholder="Password"
+              type="password"
+              autoComplete="current-password"
+              value={password} onChange={e=>setPassword(e.target.value)}
+            />
+            <button
+              onClick={handleEmailPassword}
+              disabled={busy || !email || !password}
+              className="w-full rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-medium py-2"
+            >
+              {busy ? 'Working…' : 'Sign in / Create account'}
+            </button>
+          </div>
+
+          {/* Magic link */}
+          <div>
+            <div className="text-sm mb-2 text-white/70">Magic Link</div>
+            <input
+              className="w-full rounded-lg bg-white/10 border border-white/10 px-3 py-2 mb-3 outline-none focus:border-white/20"
+              placeholder="Email"
+              type="email"
+              value={email} onChange={e=>setEmail(e.target.value)}
+            />
+            <button
+              onClick={handleMagicLink}
+              disabled={busy || !email}
+              className="w-full rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 py-2"
+            >
+              {busy ? 'Sending…' : 'Send magic link'}
+            </button>
+
+            <div className="my-4 h-px bg-white/10" />
+            <button
+              onClick={handleGoogle}
+              disabled={busy}
+              className="w-full rounded-lg bg-white text-black font-medium py-2 hover:bg-white/90 disabled:opacity-50"
+            >
+              Continue with Google
+            </button>
+          </div>
         </div>
 
-        {/* Shared Email Field */}
-        <div className="space-y-2 mb-4">
-          <Label className="text-white/80">Email</Label>
-          <Input
-            type="email"
-            autoComplete="email"
-            placeholder="you@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-
-        {/* Password mode */}
-        {mode === 'password' && (
-          <form onSubmit={onSubmitPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-white/80">Password</Label>
-              <Input
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={pwd}
-                onChange={(e) => setPwd(e.target.value)}
-              />
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={onForgot}
-                  className="text-sm text-teal-300 hover:text-teal-200"
-                >
-                  Forgot password?
-                </button>
-              </div>
-            </div>
-
-            {msg && <div className="text-sm text-amber-300">{msg}</div>}
-
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? 'Working…' : 'Sign in / Create account'}
-            </Button>
-          </form>
-        )}
-
-        {/* Magic link mode */}
-        {mode === 'magic' && (
-          <form onSubmit={onSubmitMagic} className="space-y-4">
-            {msg && <div className="text-sm text-amber-300">{msg}</div>}
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? 'Sending…' : 'Send magic link'}
-            </Button>
-          </form>
-        )}
-
-        {/* Divider */}
-        <div className="my-4 flex items-center gap-3 text-white/40">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs">or</span>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-
-        {/* Google */}
-        <Button className="w-full" variant="secondary" onClick={onGoogle} disabled={loading}>
-          Continue with Google
-        </Button>
+        {msg && <div className="mt-4 text-sm text-white/80">{msg}</div>}
       </div>
     </div>
   );
