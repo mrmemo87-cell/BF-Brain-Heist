@@ -1,31 +1,26 @@
-import * as React from 'react';
-import { supa } from '@/SupabaseClient';
+import { useEffect } from "react";
+import { supa } from "@/SupabaseClient";
 
-export function usePresence(intervalMs = 60_000) {
-  React.useEffect(() => {
+export function usePresence() {
+  useEffect(() => {
     let timer: any;
 
-    const tick = async () => {
-      // keep session warm & update presence
-      await supa.auth.refreshSession().catch(() => {});
-      await supa.rpc('touch_presence').catch(() => {});
-    };
+    async function ping() {
+      if (document.visibilityState !== "visible") return;
+      try { await supa.rpc("touch_presence"); } catch {}
+    }
 
-    // initial
-    tick();
+    // first touch + interval
+    ping();
+    timer = setInterval(ping, 25_000);
 
-    // repeat
-    timer = setInterval(tick, intervalMs);
-
-    // refresh immediately on focus
-    const onVis = () => {
-      if (document.visibilityState === 'visible') tick();
-    };
-    document.addEventListener('visibilitychange', onVis);
+    // refresh on tab focus
+    const onVis = () => setTimeout(ping, 0);
+    document.addEventListener("visibilitychange", onVis);
 
     return () => {
       clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, [intervalMs]);
+  }, []);
 }

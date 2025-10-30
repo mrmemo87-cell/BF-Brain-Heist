@@ -1,155 +1,122 @@
 ﻿// src/SupabaseClient.ts
-import { createClient } from '@supabase/supabase-js';
-import { focusManager, type QueryClient } from '@tanstack/react-query';
+import { createClient } from "@supabase/supabase-js";
 
-export const supa = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      flowType: 'pkce',
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      multiTab: false,
-    },
+const url = import.meta.env.VITE_SUPABASE_URL!;
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+
+export const supa = createClient(url, key, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: "pkce",
+    multiTab: false, // avoids weird tab-switch auth events
+  },
+});
+
+declare global {
+  interface Window {
+    supabase?: typeof supa;
+    __bh_auth_lifecycle?: boolean;
   }
-);
-
-/**
- * 🔧 Thenable patch: PostgREST builders implement `.then` but may not implement `.catch`/`.finally`.
- * Some code (or libs) will do `supa.rpc(...).catch(...)` which throws "catch is not a function".
- * We probe a builder instance and patch its prototype once so every future builder gains `.catch`/`.finally`.
- * This does NOT make any network requests.
- */
-try {
-  // create a builder without executing it
-  // (no await/then => no network; it's just a builder object)
-  // @ts-expect-error - we just need a PostgREST builder instance
-  const probe = supa.rpc('__bh_proto_probe__');
-  const proto = Object.getPrototypeOf(probe);
-
-  if (proto && typeof proto.then === 'function') {
-    if (typeof proto.catch !== 'function') {
-      Object.defineProperty(proto, 'catch', {
-        configurable: true,
-        writable: true,
-        value: function (onRejected: (reason?: any) => any) {
-          return Promise.resolve(this).catch(onRejected);
-        },
-      });
-    }
-    if (typeof proto.finally !== 'function') {
-      Object.defineProperty(proto, 'finally', {
-        configurable: true,
-        writable: true,
-        value: function (onFinally: () => any) {
-          return Promise.resolve(this).finally(onFinally);
-        },
-      });
-    }
-  }
-} catch {
-  // ignore – worst case the patch didn't apply, but app still runs
 }
 
-/**
- * Call ONCE from App root; returns a cleanup fn.
- * Example:
- *   const qc = new QueryClient({...});
- *   React.useEffect(() => installAuthLifecycle(qc), [qc]);
- */
-export function installAuthLifecycle(qc?: QueryClient) {
-  // keep tokens fresh in the background (best-effort)
-  (supa.auth as any).startAutoRefresh?.();
+/** One-time wiring: auth listeners, presence heartbeat, tab-resume. */
+export function installAuthLifecycle() {
+  if (window.__bh_auth_lifecycle) return;
+  window.__bh_auth_lifecycle = true;
 
-  const refresh = async () => {
-    try {
-      await supa.auth.refreshSession();
-    } catch {
-      // swallow refresh blips
-    }
-  };
+  // handy for console debugging
+  window.supabase = supa;
 
-  const requery = () => qc?.invalidateQueries();
-
-  // ⚠️ Non-blocking auth callback (NO Supabase calls directly inside)
-  const { data: { subscription } } = supa.auth.onAuthStateChange((event) => {
-    // Defer to next tick to avoid browser deadlocks on tab focus
-    setTimeout(() => {
-      if (event === 'SIGNED_OUT') {
-        qc?.clear();
-        if (location.pathname !== '/login') {
-          // soft redirect without blocking the event loop
-          location.href = '/login';
-        }
-        return;
-      }
-      // Any other auth event -> let React Query refire
-      requery();
+  // Avoid deadlocks: wrap any Supabase calls inside onAuthStateChange with setTimeout
+  supa.auth.onAuthStateChange((_evt, _session) => {
+    setTimeout(async () => {
+      try { await supa.rpc("touch_presence"); } catch {}
     }, 0);
   });
 
-  // Focus/visibility resume: refresh token + tell React Query we’re focused
-  const onFocus = async () => {
-    if (document.hidden) return;
-    await refresh();                  // run outside the auth callback
-    focusManager.setFocused(true);    // enables refetchOnWindowFocus behavior
-    requery();
-  };
-
-  window.addEventListener('focus', onFocus);
-  document.addEventListener('visibilitychange', onFocus);
-  window.addEventListener('online', onFocus);
-
-  // Safety refresh every 8 minutes (keeps session warm)
-  const id = window.setInterval(() => { void refresh(); }, 8 * 60 * 1000);
-
-  return () => {
-    subscription.unsubscribe();
-    window.removeEventListener('focus', onFocus);
-    document.removeEventListener('visibilitychange', onFocus);
-    window.removeEventListener('online', onFocus);
-    clearInterval(id);
-  };
-}
-
-/**
- * Optional helper: use this wrapper if you prefer `await rpc('name', args)`
- * everywhere (it throws on RPC error and returns data on success).
- */
-export async function rpc<T = unknown>(fn: string, args?: Record<string, any>): Promise<T> {
-  const { data, error } = await supa.rpc<T>(fn, args as any);
-  if (error) throw error;
-  return data as T;
-}
-
-/**
- * Ensures a profile exists for the current user after login/signup.
- * Call this right after successful signInWithPassword or OAuth/magic-link exchange.
- * Idempotent and safe to call multiple times.
- */
-export async function ensureProfile() {
-  const s = await supa.auth.getSession();
-  const uid = s.data.session?.user?.id;
-  if (!uid) return;
-
-  // quick probe
-  const { data: me } = await supa.rpc('whoami_profile').catch(() => ({ data: null }));
-  if (me && me[0]) return;
-
-  // ensure at DB level (safe if already exists)
-  await supa.rpc('profile_bootstrap_with_uid', { p_user_id: uid });
-}
-
-async function afterAuth(chosenBatch?: '8A'|'8B'|'8C') {
-  const s = await supa.auth.getSession();
-  const uid = s.data.session?.user?.id;
-  if (!uid) return;
-  await supa.rpc('profile_bootstrap_with_uid', {
-    p_user_id: uid,
-    p_batch: chosenBatch ?? null,
-    p_username: null,
-    p_avatar_url: null,
+  // Keep “online” when tab returns to foreground
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    setTimeout(async () => {
+      try { await supa.rpc("session_start"); } catch {}
+      try { await supa.rpc("touch_presence"); } catch {}
+    }, 0);
   });
+
+  // Gentle heartbeat (60s)
+  setInterval(async () => {
+    try { await supa.rpc("touch_presence"); } catch {}
+  }, 60_000);
+}
+
+/** Ensure a row exists in public.profiles for the logged-in user. */
+export async function ensureProfile(opts?: {
+  batch?: "8A" | "8B" | "8C" | null;
+  username?: string | null;
+  avatar_url?: string | null;
+}) {
+  const {
+    data: { user },
+    error: userErr,
+  } = await supa.auth.getUser();
+  if (userErr) throw userErr;
+  if (!user) throw new Error("Not signed in");
+
+  // already there?
+  const { data: existing, error: selErr } = await supa
+    .from("profiles")
+    .select("id, username, batch")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (selErr && selErr.code !== "PGRST116") throw selErr;
+  if (existing) return existing;
+
+  const username =
+    opts?.username ??
+    (user.user_metadata as any)?.username ??
+    (user.email ? user.email.split("@")[0] : "agent");
+
+  const avatar_url =
+    opts?.avatar_url ?? (user.user_metadata as any)?.avatar_url ?? null;
+
+  const batch =
+    opts?.batch ??
+    (user.user_metadata as any)?.batch ??
+    (localStorage.getItem("bh.signupBatch") as "8A" | "8B" | "8C" | null) ??
+    null;
+
+  // Try your available bootstrap RPCs, tolerate unique-violation
+  let r = await supa.rpc("profile_bootstrap", {
+    p_username: username,
+    p_avatar_url: avatar_url,
+    p_batch: batch,
+  });
+  if (r.error) {
+    r = await supa.rpc("profile_bootstrap_with_uid", {
+      p_uid: user.id,
+      p_username: username,
+      p_avatar_url: avatar_url,
+      p_batch: batch,
+    });
+  }
+  if (r.error) {
+    r = await supa.rpc("profile_bootstrap_simple", {
+      p_username: username,
+      p_avatar_url: avatar_url,
+      p_batch: batch,
+    });
+  }
+  if (r.error && r.error.code !== "23505") throw r.error;
+
+  const { data: prof, error: finalErr } = await supa
+    .from("profiles")
+    .select("id, username, batch")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (finalErr) throw finalErr;
+
+  try { localStorage.removeItem("bh.signupBatch"); } catch {}
+  return prof ?? { id: user.id, username, batch };
 }

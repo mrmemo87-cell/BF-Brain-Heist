@@ -5,13 +5,16 @@ import { randomGravatar } from '@/lib/avatars';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { useNavigate } from 'react-router-dom';
 
 type Props = {
   me: any;            // parent provides current profile (or null-ish on first run)
-  onDone: () => void; // parent should invalidate whoAmI and close overlay
+  onDone?: () => void; // optional - parent should invalidate whoAmI and close overlay
 };
 
 export default function FirstRunSetup({ me, onDone }: Props) {
+  const nav = useNavigate();
+  const done = onDone ?? (() => nav('/leaderboard')); // <- default fallback
   const [username, setUsername] = React.useState<string>(me?.username ?? '');
   const [batch, setBatch] = React.useState<string>((me?.batch ?? '').toUpperCase());
   const [avatar, setAvatar] = React.useState<string>(me?.avatar_url ?? me?.avatarUrl ?? randomGravatar());
@@ -48,7 +51,7 @@ export default function FirstRunSetup({ me, onDone }: Props) {
       }
 
       // 3) let parent refresh its "me" query
-      onDone();
+      done();
     } catch (e: any) {
       setMsg(e?.message || 'Failed to save. Try again.');
     } finally {

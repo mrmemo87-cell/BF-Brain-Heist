@@ -1,82 +1,51 @@
-﻿// src/pages/AuthCallback.tsx
-import * as React from 'react';
-import { supa, ensureProfile } from '@/SupabaseClient';
+﻿import React, { useEffect, useState } from "react";
+import { supa, ensureProfile } from "@/SupabaseClient";
+import { useNavigate } from "react-router-dom";
 
 export default function AuthCallback() {
-  const [err, setErr] = React.useState<string|null>(null);
+  const nav = useNavigate();
+  const [msg, setMsg] = useState("Finishing sign-in…");
 
-  React.useEffect(() => {
+  useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
-        const href = window.location.href;
-        const url = new URL(href);
-
-        // 1) New auth code flow
-        const code = url.searchParams.get('code');
-        if (code) {
-          try {
-            await (supa.auth as any).exchangeCodeForSession?.(code);
-          } catch {
-            if ((supa.auth as any).getSessionFromUrl) {
-              await (supa.auth as any).getSessionFromUrl({ storeSession: true });
-            } else {
-              throw new Error('Could not exchange auth code.');
-            }
-          }
+        // Make sure Supabase consumes the URL (PKCE)
+        // detectSessionInUrl=true handles most cases, but we can still sanity-check:
+        const { data: sess } = await supa.auth.getSession();
+        if (!sess.session) {
+          setMsg("Validating session…");
+          // give the SDK one microtask to finalize
+          await new Promise((r) => setTimeout(r, 0));
         }
 
-        // 2) Legacy hash tokens
-        if (window.location.hash.includes('access_token')) {
-          const h = new URLSearchParams(window.location.hash.slice(1));
-          const at = h.get('access_token');
-          const rt = h.get('refresh_token');
-          try {
-            if ((supa.auth as any).setSession && at && rt) {
-              await (supa.auth as any).setSession({ access_token: at, refresh_token: rt });
-            } else if ((supa.auth as any).getSessionFromUrl) {
-              await (supa.auth as any).getSessionFromUrl({ storeSession: true });
-            }
-          } catch {
-            if ((supa.auth as any).getSessionFromUrl) {
-              await (supa.auth as any).getSessionFromUrl({ storeSession: true });
-            }
-          }
-        }
+        // Ensure a profile row exists (and pass the batch hint if we saved one)
+        const batchHint =
+          (localStorage.getItem("bh.signupBatch") as "8A" | "8B" | "8C" | null) ??
+          null;
 
-        // 3) Some links hit /auth/v1/verify?type=...&token=...
-        // Supabase usually verifies then redirects to redirectTo. In case we’re here directly:
-        const token = url.searchParams.get('token');
-        const type  = url.searchParams.get('type'); // 'signup' | 'recovery' | 'magiclink' | ...
-        if (token && (supa.auth as any).verifyOtp) {
-          // This path is rare for magic links, but safe to attempt
-          await (supa.auth as any).verifyOtp({ token, type: (type as any) || 'magiclink', email: '' }).catch(() => {});
-        }
+        setMsg("Setting up your profile…");
+        await ensureProfile({ batch: batchHint });
 
-        // Clean URL
-        ['code','state','error','error_description','type','token'].forEach(k => url.searchParams.delete(k));
-        window.history.replaceState({}, '', url.toString());
-
-        // Ensure profile exists before redirecting
-        await ensureProfile();
-
-        // Done → hard reload to refresh queries
+        setMsg("All set. Redirecting…");
         if (!alive) return;
-        window.location.replace('/');
+        nav("/leaderboard", { replace: true });
       } catch (e: any) {
-        setErr(e?.message || 'Auth callback failed.');
+        console.error("Auth callback failed:", e);
+        setMsg(e?.message || "Sign-in failed. Try again.");
+        setTimeout(() => nav("/login", { replace: true }), 1000);
       }
     })();
-
-    return () => { alive = false; };
-  }, []);
+    return () => {
+      alive = false;
+    };
+  }, [nav]);
 
   return (
-    <div className="w-full h-screen grid place-items-center text-white">
-      <div className="text-center">
-        <div className="text-xl mb-2">Finishing sign-in…</div>
-        {err && <div className="text-rose-300 text-sm">{err}</div>}
+    <div className="min-h-[70vh] grid place-items-center">
+      <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 w-[min(92vw,420px)] text-center">
+        <div className="text-lg font-semibold mb-2">Brain Heist</div>
+        <div className="opacity-80">{msg}</div>
       </div>
     </div>
   );
