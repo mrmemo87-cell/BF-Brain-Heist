@@ -7,10 +7,11 @@ export const supa = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY!,
   {
     auth: {
+      flowType: 'pkce',
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      multiTab: false, // avoid cross-tab churn
+      multiTab: false,
     },
   }
 );

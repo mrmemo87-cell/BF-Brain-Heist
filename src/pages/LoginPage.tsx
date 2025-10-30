@@ -37,62 +37,56 @@ export default function LoginPage() {
   // --- Handlers -------------------------------------------------------------
 
   async function onSubmitPassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (loading) return;
-    setMsg(null);
-    setLoading(true);
+  e.preventDefault();
+  if (loading) return;
+  setMsg(null);
+  setLoading(true);
 
-    try {
-      const emailNorm = email.trim().toLowerCase();
-      if (!emailNorm || !pwd) {
-        setMsg('Email and password are required.');
-        return;
-      }
-
-      // 1) Try sign-in
-      const { error: siErr } = await supa.auth.signInWithPassword({
-        email: emailNorm,
-        password: pwd,
-      });
-
-      if (!siErr) {
-        // Full reload so all queries refetch (matches your app’s expectations)
-        window.location.replace('/');
-        return;
-      }
-
-      // 2) If invalid creds → attempt sign-up (create account)
-      if (/invalid login credentials/i.test(siErr.message || '')) {
-        const { data, error: suErr } = await supa.auth.signUp({
-          email: emailNorm,
-          password: pwd,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-        });
-        if (suErr) {
-          if (/already registered/i.test(suErr.message || '')) {
-            throw new Error('This email already exists. Check your password or reset it.');
-          }
-          throw suErr;
-        }
-
-        // If email confirmation is ON, no session yet
-        if (!data.session) {
-          setMsg('We sent a confirmation link. Check your email to finish sign up.');
-          return;
-        }
-
-        // Otherwise you’re in
-        window.location.replace('/');
-        return;
-      }
-
-      throw siErr;
-    } catch (err: any) {
-      setMsg(err?.message || 'Login failed. Try again.');
-    } finally {
-      setLoading(false);
+  try {
+    const emailNorm = email.trim().toLowerCase();
+    if (!emailNorm || !pwd) {
+      setMsg('Email and password are required.');
+      return;
     }
+
+    // 1) Try normal login
+    const { data: siData, error: siErr } = await supa.auth.signInWithPassword({
+      email: emailNorm,
+      password: pwd,
+    });
+    if (!siErr && siData.session) {
+      window.location.replace('/'); // you’re in
+      return;
+    }
+
+    // 2) If creds wrong or user not found → create account
+    const { data: suData, error: suErr } = await supa.auth.signUp({
+      email: emailNorm,
+      password: pwd,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (suErr) throw suErr;
+
+    // With "Confirm email" OFF, Supabase returns a session immediately.
+    if (suData.session) {
+      window.location.replace('/');
+      return;
+    }
+
+    // (safety) If no session returned for any reason, force a login now
+    const { data: si2, error: si2Err } = await supa.auth.signInWithPassword({
+      email: emailNorm,
+      password: pwd,
+    });
+    if (si2Err || !si2.session) throw si2Err || new Error('Could not start session.');
+    window.location.replace('/');
+  } catch (err: any) {
+    setMsg(err?.message || 'Login failed. Try again.');
+  } finally {
+    setLoading(false);
   }
+}
+
 
   async function onSubmitMagic(e: React.FormEvent) {
     e.preventDefault();
