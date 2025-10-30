@@ -2,34 +2,52 @@ import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supa } from '@/SupabaseClient';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/Avatar';
+import { usePresence } from '@/hooks/usePresence';
 
 type Row = {
   user_id: string;
-  name: string;
-  batch: string;
-  level: number;
-  xp: number;
-  coins: number;
+  name?: string | null;      // new: 'name'
+  username?: string | null;  // compat with older RPCs
+  batch?: string | null;
+  level?: number | null;
+  xp?: number | null;
+  coins?: number | null;
   avatar_url?: string | null;
+  last_seen?: string | null;      // ISO
+  presence?: 'online' | 'idle' | 'away' | null;
+  presence_color?: 'green' | 'yellow' | 'red' | null;
   rank: number;
 };
+
+function timeAgo(iso?: string | null) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.max(0, Math.floor(diff / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m ago`;
+}
 
 export default function LeaderboardPanel() {
   const qc = useQueryClient();
   const [uid, setUid] = React.useState<string | null>(null);
 
-  // who am I (just uid for disabling self-attack)
+  // keep presence & session warm (green/yellow/red accurate)
+  usePresence(60_000);
+
+  // who am I
   React.useEffect(() => {
     let alive = true;
     supa.auth.getUser().then(({ data }) => {
       if (alive) setUid(data.user?.id ?? null);
     }).catch(() => {});
-    // keep AP alive quietly
+    // nudge AP/session silently
     supa.rpc('session_start').catch(() => {});
     return () => { alive = false; };
   }, []);
 
-  // AP status (to disable attack if no AP)
+  // AP
   const { data: ap = { ap_now: 0, ap_max: 0 } } = useQuery({
     queryKey: ['ap-status'],
     queryFn: async () => {
@@ -37,12 +55,12 @@ export default function LeaderboardPanel() {
       if (r.error) throw r.error;
       return r.data ?? { ap_now: 0, ap_max: 0 };
     },
-    refetchInterval: 20000,
+    refetchInterval: 20_000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 
-  // Leaderboard data
+  // Leaderboard
   const { data: rows = [], isLoading, error, refetch } = useQuery({
     queryKey: ['leaderboard', 50],
     queryFn: async () => {
@@ -52,11 +70,11 @@ export default function LeaderboardPanel() {
     },
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    refetchInterval: 15000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: true,
   });
 
-  // Attack action
+  // Attack
   const attack = useMutation({
     mutationFn: async (defenderId: string) => {
       const r = await supa.rpc('raid_attack', { defender_id: defenderId });
@@ -64,13 +82,12 @@ export default function LeaderboardPanel() {
       return r.data;
     },
     onSuccess: async () => {
-      // refresh AP + board after a fight
       await qc.invalidateQueries({ queryKey: ['ap-status'] });
       await qc.invalidateQueries({ queryKey: ['leaderboard'] });
     },
   });
 
-  // On tab focus, do a quick refresh (cheap)
+  // Focus refresh
   React.useEffect(() => {
     const cb = () => {
       if (document.visibilityState === 'visible') {
@@ -103,8 +120,14 @@ export default function LeaderboardPanel() {
       </div>
 
       {rows.map((r) => {
+        const displayName = (r.name || r.username || 'agent').toString();
         const canAttack = !!uid && uid !== r.user_id && (ap.ap_now ?? 0) >= 2;
         const isMe = uid === r.user_id;
+
+        const dotColor =
+          r.presence_color === 'green' ? 'bg-emerald-400' :
+          r.presence_color === 'yellow' ? 'bg-amber-300' :
+          'bg-rose-400';
 
         return (
           <div
@@ -114,17 +137,23 @@ export default function LeaderboardPanel() {
             <div className="flex items-center gap-3">
               <div className="w-10 text-center text-white/60 font-mono">#{r.rank}</div>
 
-              <Avatar className="h-12 w-12 ring-1 ring-white/20">
-                <AvatarImage src={r.avatar_url ?? undefined} />
-                <AvatarFallback className="bg-white/10 text-white">
-                  {r.name?.slice(0,2)?.toUpperCase() || 'AG'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-12 w-12 ring-1 ring-white/20">
+                  <AvatarImage src={r.avatar_url ?? undefined} />
+                  <AvatarFallback className="bg-white/10 text-white">
+                    {displayName.slice(0,2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span
+                  className={`absolute -right-1 -bottom-1 h-3 w-3 rounded-full ring-2 ring-black/40 ${dotColor}`}
+                  title={r.presence ?? 'away'}
+                />
+              </div>
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <div className={`truncate ${isMe ? 'text-teal-300' : 'text-white'}`}>
-                    {r.name || 'agent'}
+                    {displayName}
                   </div>
                   <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80">
                     {r.batch || '—'}
@@ -132,6 +161,10 @@ export default function LeaderboardPanel() {
                 </div>
                 <div className="text-sm text-white/60">
                   L{r.level ?? 1} • {r.xp ?? 0} XP • {r.coins ?? 0} coins
+                  <span className="mx-2">•</span>
+                  <span title={r.last_seen || ''}>
+                    seen {timeAgo(r.last_seen)}
+                  </span>
                 </div>
               </div>
 
