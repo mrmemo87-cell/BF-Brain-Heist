@@ -123,3 +123,21 @@ export async function rpc<T = unknown>(fn: string, args?: Record<string, any>): 
   if (error) throw error;
   return data as T;
 }
+
+/**
+ * Ensures a profile exists for the current user after login/signup.
+ * Call this right after successful signInWithPassword or OAuth/magic-link exchange.
+ * Idempotent and safe to call multiple times.
+ */
+export async function ensureProfile() {
+  const s = await supa.auth.getSession();
+  const uid = s.data.session?.user?.id;
+  if (!uid) return;
+
+  // quick probe
+  const { data: me } = await supa.rpc('whoami_profile').catch(() => ({ data: null }));
+  if (me && me[0]) return;
+
+  // ensure at DB level (safe if already exists)
+  await supa.rpc('profile_bootstrap_with_uid', { p_user_id: uid });
+}

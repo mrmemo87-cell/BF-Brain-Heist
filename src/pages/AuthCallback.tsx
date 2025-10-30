@@ -1,6 +1,6 @@
 ﻿// src/pages/AuthCallback.tsx
 import * as React from 'react';
-import { supa } from '@/SupabaseClient';
+import { supa, ensureProfile } from '@/SupabaseClient';
 
 export default function AuthCallback() {
   const [err, setErr] = React.useState<string|null>(null);
@@ -57,6 +57,9 @@ export default function AuthCallback() {
         // Clean URL
         ['code','state','error','error_description','type','token'].forEach(k => url.searchParams.delete(k));
         window.history.replaceState({}, '', url.toString());
+
+        // Ensure profile exists before redirecting
+        await ensureProfile();
 
         // Done → hard reload to refresh queries
         if (!alive) return;

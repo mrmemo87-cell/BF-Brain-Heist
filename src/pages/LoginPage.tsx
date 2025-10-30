@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supa } from '@/SupabaseClient';
+import { supa, ensureProfile } from '@/SupabaseClient';
 
 export default function LoginPage() {
   const nav = useNavigate();
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [msg, setMsg] = React.useState<string | null>(null);
 
   async function goDashboard() {
+    await ensureProfile();
     // Tiny delay so UI can repaint
     await new Promise(r => setTimeout(r, 60));
     nav('/dashboard', { replace: true });
